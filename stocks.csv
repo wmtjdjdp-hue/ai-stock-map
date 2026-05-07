@@ -1,0 +1,24 @@
+ticker,company,category,business,ai_relation,ai_score,price,per,pbr,market_cap,keywords,related
+NVDA,NVIDIA,GPU,AI向けGPU・データセンター向け半導体,AI学習・推論の中心となるGPUを作る,5,サンプル,55倍,45倍,サンプル,GPU AI 半導体 データセンター,AMD MU ASML VRT
+AMD,AMD,GPU,GPU・CPU・AIアクセラレータ,AI向けGPUやサーバーCPUで関連,4,サンプル,60倍,8倍,サンプル,GPU CPU AI 半導体,NVDA MU
+MU,Micron,メモリー,DRAM・NAND・HBM関連,AIサーバーに必要なメモリー需要と関係,4,サンプル,25倍,2倍,サンプル,メモリー DRAM HBM NAND,NVDA AMD 000660
+000660,SK hynix,メモリー,DRAM・NAND・HBM,AI向けHBMメモリーで重要,5,サンプル,15倍,1.3倍,サンプル,HBM DRAM メモリー,MU NVDA
+VRT,Vertiv,冷却,データセンター冷却・電源設備,AIデータセンター拡大で冷却・電源需要が増える,5,サンプル,33倍,4倍,サンプル,冷却 電源 UPS データセンター,TT JCI ETN PWR
+TT,Trane Technologies,冷却,空調・冷却ソリューション,データセンター冷却需要に関係,4,サンプル,23倍,5.3倍,サンプル,冷却 HVAC 空調,VRT JCI
+JCI,Johnson Controls,冷却,HVAC・ビル制御・冷却制御,施設管理と冷却制御で関連,3,サンプル,18倍,2.1倍,サンプル,HVAC 冷却 制御,VRT TT
+ETN,Eaton,電力,電力管理・配電設備,データセンターの電力設備需要で関連,5,サンプル,24倍,6.2倍,サンプル,電力 配電 変圧器 データセンター,VRT HUBB PWR
+HUBB,Hubbell,電力,電設機器・配線機器,送電・配電・電設需要に関係,4,サンプル,25倍,6倍,サンプル,電設 配線 電力,ETN PWR
+PWR,Quanta Services,電力,電力インフラ建設・送電網,AIデータセンター向け電力インフラ整備で関連,4,サンプル,22倍,4.5倍,サンプル,送電 電力インフラ 建設,ETN HUBB CEG
+CEG,Constellation Energy,原子力,原子力発電・電力供給,AIデータセンターの電力需要増で注目,5,サンプル,32倍,2.5倍,サンプル,原子力 電力 データセンター,SMR ETN PWR
+SMR,NuScale Power,原子力,小型原子炉 SMR,将来のAIデータセンター向け電源候補として関連,4,サンプル,赤字,サンプル,サンプル,SMR 原子力 小型原子炉,CEG
+GLW,Corning,光通信,光ファイバー・特殊ガラス,AIデータセンター間通信や光通信インフラで関連,4,サンプル,19倍,2.1倍,サンプル,光ファイバー 光通信 ガラス,LITE COHR
+LITE,Lumentum,光通信,光モジュール・光部品,データセンター光通信部品で関連,4,サンプル,26倍,3倍,サンプル,光部品 光通信 レーザー,GLW COHR
+COHR,Coherent,光通信,光デバイス・レーザー・通信部品,高速光通信やレーザー部品で関連,4,サンプル,28倍,3.2倍,サンプル,光通信 レーザー 光デバイス,GLW LITE
+EQIX,Equinix,データセンター,データセンター運営 コロケーション,AI利用増でデータセンター需要が増える,5,サンプル,30倍,3.5倍,サンプル,データセンター REIT コロケーション,DLR VRT ETN
+DLR,Digital Realty,データセンター,データセンター運営,AIサーバー需要増によりデータセンター需要と関係,4,サンプル,28倍,2.2倍,サンプル,データセンター REIT,EQIX VRT
+ASML,ASML,半導体製造装置,EUV露光装置,高性能AI半導体の製造に必要,5,サンプル,32倍,10倍,サンプル,EUV 露光 半導体製造装置,AMAT LRCX NVDA
+AMAT,Applied Materials,半導体製造装置,成膜・エッチングなど半導体製造装置,AI半導体投資が増えると製造装置需要に関係,4,サンプル,25倍,6倍,サンプル,半導体製造装置 成膜 エッチング,ASML LRCX
+LRCX,Lam Research,半導体製造装置,エッチング装置など,AI半導体の設備投資と関係,4,サンプル,24倍,6.5倍,サンプル,半導体製造装置 エッチング,ASML AMAT
+FCX,Freeport-McMoRan,素材,銅鉱山・銅生産,電線・送電・データセンター設備で銅需要に関係,3,サンプル,20倍,2倍,サンプル,銅 資源 電線 送電,SCCO ETN PWR
+SCCO,Southern Copper,素材,銅生産,電化・送電・データセンター拡大で銅需要に関係,3,サンプル,14倍,2.5倍,サンプル,銅 資源 電線,FCX
+ALB,Albemarle,素材,リチウム・電池材料,蓄電池や電力安定化の文脈で間接関連,3,サンプル,18倍,2倍,サンプル,リチウム 電池 蓄電,FCX

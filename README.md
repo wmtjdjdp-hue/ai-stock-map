@@ -1,7 +1,7 @@
-# AI関連株コード辞典 v4 Multi Source
+# AI関連株コード辞典 v5 Multi Source + Finnhub
 
 ## v4で追加した機能
-- yfinance + FMP + Alpha Vantage の複数ソース補完
+- yfinance + FMP + Alpha Vantage + Finnhub の複数ソース補完
 - 各項目の取得元表示
 - APIキー未設定でも yfinance のみで動作
 - Streamlit Secrets からAPIキーを読み込み
@@ -24,6 +24,7 @@ Settings → Secrets
 ```toml
 FMP_API_KEY = "ここにFMPのAPIキー"
 ALPHAVANTAGE_API_KEY = "ここにAlpha VantageのAPIキー"
+FINNHUB_API_KEY = "ここにFinnhubのAPIキー"
 ```
 
 片方だけでもOKです。

@@ -8,22 +8,24 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v4", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v5", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v4
+# AI関連株コード辞典 v5
 # 目的：
-# yfinanceを中心に、Alpha Vantage / FMP の無料APIを補助として使う構造
+# yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
 # 優先順位：
 # 1. yfinance
 # 2. FMP_API_KEY があれば Financial Modeling Prep
-# 3. ALPHAVANTAGE_API_KEY があれば Alpha Vantage
-# 4. 取れなければ「未取得」
+# 3. FINNHUB_API_KEY があれば Finnhub
+# 4. ALPHAVANTAGE_API_KEY があれば Alpha Vantage
+# 5. 取れなければ「未取得」
 #
 # Streamlit Cloud の Secrets に入れる例：
 # FMP_API_KEY = "あなたのFMPキー"
 # ALPHAVANTAGE_API_KEY = "あなたのAlpha Vantageキー"
+# FINNHUB_API_KEY = "あなたのFinnhubキー"
 # ============================================================
 
 # -----------------------------
@@ -53,6 +55,7 @@ def get_secret(name):
 
 FMP_API_KEY = get_secret("FMP_API_KEY")
 ALPHAVANTAGE_API_KEY = get_secret("ALPHAVANTAGE_API_KEY")
+FINNHUB_API_KEY = get_secret("FINNHUB_API_KEY")
 
 # -----------------------------
 # 共通フォーマット
@@ -345,15 +348,101 @@ def get_alpha_data(symbol, api_key):
     return result
 
 # -----------------------------
+# Finnhub
+# -----------------------------
+
+@st.cache_data(ttl=3600)
+def get_finnhub_data(symbol, api_key):
+    result = {
+        "source": "Finnhub",
+        "price": None,
+        "prev_close": None,
+        "change_pct": None,
+        "market_cap": None,
+        "per": None,
+        "forward_pe": None,
+        "pbr": None,
+        "forward_pbr": None,
+        "fifty_two_high": None,
+        "fifty_two_low": None,
+        "dividend_yield": None,
+        "currency": "USD",
+        "sector": "",
+        "industry": "",
+    }
+
+    if not api_key or not symbol:
+        return result
+
+    try:
+        # Quote endpoint
+        url = "https://finnhub.io/api/v1/quote"
+        params = {"symbol": symbol, "token": api_key}
+        r = requests.get(url, params=params, timeout=10)
+        if r.ok:
+            q = r.json()
+            result["price"] = pick_first(q.get("c"))
+            result["prev_close"] = pick_first(q.get("pc"))
+            result["change_pct"] = pick_first(q.get("dp"))
+
+        # Basic financials endpoint
+        url = "https://finnhub.io/api/v1/stock/metric"
+        params = {"symbol": symbol, "metric": "all", "token": api_key}
+        r = requests.get(url, params=params, timeout=10)
+        if r.ok:
+            data = r.json()
+            m = data.get("metric", {}) if isinstance(data, dict) else {}
+
+            # FinnhubのmarketCapitalizationは多くの場合「百万ドル」単位なので、表示用にドルへ変換
+            mc = pick_first(m.get("marketCapitalization"))
+            if mc is not None:
+                try:
+                    result["market_cap"] = float(mc) * 1_000_000
+                except Exception:
+                    result["market_cap"] = mc
+
+            result["per"] = pick_first(
+                m.get("peBasicExclExtraTTM"),
+                m.get("peNormalizedAnnual"),
+                m.get("peTTM")
+            )
+            result["forward_pe"] = pick_first(m.get("forwardPE"))
+            result["pbr"] = pick_first(
+                m.get("pbAnnual"),
+                m.get("pbQuarterly")
+            )
+            result["fifty_two_high"] = pick_first(m.get("52WeekHigh"))
+            result["fifty_two_low"] = pick_first(m.get("52WeekLow"))
+            result["dividend_yield"] = pick_first(
+                m.get("currentDividendYieldTTM"),
+                m.get("dividendYieldIndicatedAnnual")
+            )
+
+        # Company profile endpoint
+        url = "https://finnhub.io/api/v1/stock/profile2"
+        params = {"symbol": symbol, "token": api_key}
+        r = requests.get(url, params=params, timeout=10)
+        if r.ok:
+            p = r.json()
+            result["currency"] = pick_first(p.get("currency"), result["currency"])
+            result["industry"] = pick_first(p.get("finnhubIndustry"), "")
+
+    except Exception:
+        pass
+
+    return result
+
+# -----------------------------
 # 複数データ源を合成
 # -----------------------------
 @st.cache_data(ttl=1800)
-def get_combined_data(yf_ticker, fmp_key, alpha_key):
+def get_combined_data(yf_ticker, fmp_key, alpha_key, finnhub_key):
     yf_data = get_yfinance_data(yf_ticker)
 
     symbol = to_alpha_symbol(yf_ticker)
     fmp_data = get_fmp_data(symbol, fmp_key) if symbol else {}
     alpha_data = get_alpha_data(symbol, alpha_key) if symbol else {}
+    finnhub_data = get_finnhub_data(symbol, finnhub_key) if symbol else {}
 
     result = {}
     source_map = {}
@@ -365,11 +454,12 @@ def get_combined_data(yf_ticker, fmp_key, alpha_key):
         "currency", "sector", "industry"
     ]
 
-    # 優先順位は yfinance -> FMP -> Alpha Vantage
+    # 優先順位は yfinance -> FMP -> Finnhub -> Alpha Vantage
     for k in keys:
         candidates = [
             ("yfinance", yf_data.get(k)),
             ("FMP", fmp_data.get(k) if fmp_data else None),
+            ("Finnhub", finnhub_data.get(k) if finnhub_data else None),
             ("Alpha Vantage", alpha_data.get(k) if alpha_data else None),
         ]
         value = None
@@ -382,7 +472,7 @@ def get_combined_data(yf_ticker, fmp_key, alpha_key):
         result[k] = value
         source_map[k] = src if value is not None and value != "" else "未取得"
 
-    return result, source_map, yf_data, fmp_data, alpha_data
+    return result, source_map, yf_data, fmp_data, alpha_data, finnhub_data
 
 # -----------------------------
 # 外部リンク
@@ -533,7 +623,7 @@ def show_source_table(source_map):
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 def show_stock_page(row):
-    combined, source_map, yf_data, fmp_data, alpha_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY)
+    combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
 
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
     col1, col2 = st.columns([1.1, 2])
@@ -556,12 +646,12 @@ def show_stock_page(row):
     show_external_links(row)
 
     st.subheader("📊 自動取得データ：複数ソース補完")
-    if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY:
+    if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
         st.markdown(
             """
             <div class="notice">
             現在は <b>yfinanceのみ</b> で取得しています。<br>
-            FMP_API_KEY または ALPHAVANTAGE_API_KEY を Streamlit Secrets に入れると、PER/PBR/時価総額の補完ができます。
+            FMP_API_KEY / ALPHAVANTAGE_API_KEY / FINNHUB_API_KEY を Streamlit Secrets に入れると、PER/PBR/時価総額の補完ができます。
             </div>
             """,
             unsafe_allow_html=True,
@@ -572,6 +662,8 @@ def show_stock_page(row):
             active.append("FMP")
         if ALPHAVANTAGE_API_KEY:
             active.append("Alpha Vantage")
+        if FINNHUB_API_KEY:
+            active.append("Finnhub")
         st.markdown(
             f"""
             <div class="safe">
@@ -639,8 +731,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v4</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">yfinance + FMP + Alpha Vantage で自動データを補完する試作版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v5</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">yfinance + FMP + Alpha Vantage + Finnhub で自動データを補完する試作版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "全銘柄一覧", "API設定確認"])
@@ -692,6 +784,7 @@ elif mode == "API設定確認":
     st.subheader("API設定確認")
     st.write("FMP_API_KEY:", "設定済み" if FMP_API_KEY else "未設定")
     st.write("ALPHAVANTAGE_API_KEY:", "設定済み" if ALPHAVANTAGE_API_KEY else "未設定")
+    st.write("FINNHUB_API_KEY:", "設定済み" if FINNHUB_API_KEY else "未設定")
     st.markdown("""
     ### Streamlit Cloudで設定する場所
     App管理画面 → Settings → Secrets
@@ -700,6 +793,7 @@ elif mode == "API設定確認":
     ```toml
     FMP_API_KEY = "ここにFMPのAPIキー"
     ALPHAVANTAGE_API_KEY = "ここにAlpha VantageのAPIキー"
+    FINNHUB_API_KEY = "ここにFinnhubのAPIキー"
     ```
 
     片方だけでもOKです。

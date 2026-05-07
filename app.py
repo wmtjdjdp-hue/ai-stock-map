@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v8", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v9", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v8
+# AI関連株コード辞典 v9
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -731,17 +731,93 @@ def make_mindmap_html(selected_ticker=None):
 
     html = f"""
     <html><head><style>
-    body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;margin:0;padding:12px;}}
-    .map {{display:flex;gap:16px;align-items:stretch;overflow-x:auto;padding:12px;border:1px solid #e5e7eb;border-radius:18px;background:white;}}
-    .center {{min-width:125px;display:flex;align-items:center;justify-content:center;}}
-    .ai {{width:110px;height:110px;border-radius:28px;background:#111827;color:white;font-size:44px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.18);}}
-    .branches {{display:grid;grid-template-columns:repeat(3,minmax(225px,1fr));gap:12px;min-width:780px;}}
-    .branch {{border:1px solid #e5e7eb;border-radius:16px;padding:10px;background:#fff;}}
+    body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;margin:0;padding:10px;overflow-x:hidden;}}
+    .map {{
+        display:flex;
+        flex-direction:column;
+        gap:14px;
+        align-items:center;
+        overflow-x:hidden;
+        overflow-y:visible;
+        padding:12px;
+        border:1px solid #e5e7eb;
+        border-radius:18px;
+        background:white;
+        box-sizing:border-box;
+        width:100%;
+        max-width:100%;
+    }}
+    .center {{
+        width:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:4px 0 8px 0;
+        position:sticky;
+        top:0;
+        background:white;
+        z-index:5;
+        border-bottom:1px solid #f1f5f9;
+    }}
+    .ai {{
+        width:92px;
+        height:92px;
+        border-radius:24px;
+        background:#111827;
+        color:white;
+        font-size:38px;
+        font-weight:900;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        box-shadow:0 8px 22px rgba(0,0,0,.18);
+    }}
+    .branches {{
+        display:grid;
+        grid-template-columns:repeat(3, 1fr);
+        gap:12px;
+        width:100%;
+        max-width:100%;
+        box-sizing:border-box;
+    }}
+    .branch {{
+        border:1px solid #e5e7eb;
+        border-radius:16px;
+        padding:10px;
+        background:#fff;
+        min-width:0;
+        box-sizing:border-box;
+    }}
     .node.category {{font-weight:900;font-size:18px;border-bottom:3px solid #ff7ab6;display:inline-block;margin-bottom:8px;}}
     .stocks {{display:flex;flex-wrap:wrap;gap:8px;}}
-    .node.stock {{border:1px solid #d1d5db;border-radius:12px;padding:8px 10px;min-width:82px;background:#f9fafb;font-weight:900;line-height:1.15;}}
-    .node.stock small {{font-weight:500;color:#555;font-size:11px;}}
-    .node.stock.active {{background:#fff7d6;border:3px solid #f59e0b;transform:scale(1.03);}}
+    .node.stock {{
+        border:1px solid #d1d5db;
+        border-radius:12px;
+        padding:8px 10px;
+        min-width:0;
+        width:calc(50% - 4px);
+        box-sizing:border-box;
+        background:#f9fafb;
+        font-weight:900;
+        line-height:1.15;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }}
+    .node.stock small {{
+        display:block;
+        font-weight:500;
+        color:#555;
+        font-size:11px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }}
+    .node.stock.active {{background:#fff7d6;border:3px solid #f59e0b;transform:scale(1.01);}}
+    @media (max-width: 760px) {{
+        .branches {{grid-template-columns:1fr;}}
+        .node.stock {{width:100%;}}
+        .ai {{width:82px;height:82px;font-size:34px;}}
+    }}
     </style></head><body>
     <div class="map"><div class="center"><div class="ai">AI</div></div><div class="branches">{''.join(blocks)}</div></div>
     </body></html>
@@ -1033,8 +1109,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v8</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">AI関連図を操作メニューへ移動。検索した銘柄をカテゴリ別にお気に入り登録できる版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v9</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">AI関連図を縦スクロール専用レイアウトに改善。AIロゴを上部中央に配置した版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
@@ -1092,7 +1168,7 @@ elif mode == "AI関連図":
         """,
         unsafe_allow_html=True,
     )
-    components.html(make_mindmap_html(), height=700, scrolling=True)
+    components.html(make_mindmap_html(), height=980, scrolling=False)
 
     st.subheader("⭐ お気に入り登録済み銘柄")
     fav_df = favorite_dataframe()

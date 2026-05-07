@@ -1,24 +1,27 @@
-ticker,yf_ticker,company,category,business,ai_relation,ai_score,keywords,related
-NVDA,NVDA,NVIDIA,GPU,AI向けGPU・データセンター向け半導体,AI学習・推論の中心となるGPUを作る。AIサーバー需要の中心銘柄。,5,GPU AI 半導体 データセンター 推論 学習,AMD MU ASML VRT
-AMD,AMD,AMD,GPU,GPU・CPU・AIアクセラレータ,AI向けGPUやサーバーCPUで関連。NVIDIAの対抗軸として見る。,4,GPU CPU AI 半導体,NVDA MU
-MU,MU,Micron,メモリー,DRAM・NAND・HBM関連,AIサーバーに必要なメモリー需要と関係。HBMやDRAM需要を見る。,4,メモリー DRAM HBM NAND,NVDA AMD 000660.KS
-000660.KS,000660.KS,SK hynix,メモリー,DRAM・NAND・HBM,AI向けHBMメモリーで重要。GPU周辺の重要部品として見る。,5,HBM DRAM メモリー,MU NVDA
-VRT,VRT,Vertiv,冷却,データセンター冷却・電源設備,AIデータセンター拡大で冷却・電源需要が増える。GPUの裏側銘柄。,5,冷却 電源 UPS データセンター,VRT TT JCI ETN PWR
-TT,TT,Trane Technologies,冷却,空調・冷却ソリューション,データセンター冷却需要に関係。空調・温度管理の視点で見る。,4,冷却 HVAC 空調,VRT JCI
-JCI,JCI,Johnson Controls,冷却,HVAC・ビル制御・冷却制御,施設管理と冷却制御で関連。データセンター設備の周辺銘柄。,3,HVAC 冷却 制御,VRT TT
-ETN,ETN,Eaton,電力,電力管理・配電設備,データセンターの電力設備需要で関連。配電・電力管理の重要銘柄。,5,電力 配電 変圧器 データセンター,VRT HUBB PWR
-HUBB,HUBB,Hubbell,電力,電設機器・配線機器,送電・配電・電設需要に関係。電力インフラ周辺銘柄。,4,電設 配線 電力,ETN PWR
-PWR,PWR,Quanta Services,電力,電力インフラ建設・送電網,AIデータセンター向け電力インフラ整備で関連。送電網投資を見る。,4,送電 電力インフラ 建設,ETN HUBB CEG
-CEG,CEG,Constellation Energy,原子力,原子力発電・電力供給,AIデータセンターの電力需要増で注目。大規模電源の代表格。,5,原子力 電力 データセンター,SMR ETN PWR
-SMR,SMR,NuScale Power,原子力,小型原子炉 SMR,将来のAIデータセンター向け電源候補として関連。期待先行にも注意。,4,SMR 原子力 小型原子炉,CEG
-GLW,GLW,Corning,光通信,光ファイバー・特殊ガラス,AIデータセンター間通信や光通信インフラで関連。通信量増加を見る。,4,光ファイバー 光通信 ガラス,LITE COHR
-LITE,LITE,Lumentum,光通信,光モジュール・光部品,データセンター光通信部品で関連。光モジュール需要を見る。,4,光部品 光通信 レーザー,GLW COHR
-COHR,COHR,Coherent,光通信,光デバイス・レーザー・通信部品,高速光通信やレーザー部品で関連。データセンター通信部品の視点。,4,光通信 レーザー 光デバイス,GLW LITE
-EQIX,EQIX,Equinix,データセンター,データセンター運営 コロケーション,AI利用増でデータセンター需要が増える。インフラ側の代表銘柄。,5,データセンター REIT コロケーション,DLR VRT ETN
-DLR,DLR,Digital Realty,データセンター,データセンター運営,AIサーバー需要増によりデータセンター需要と関係。REIT系として見る。,4,データセンター REIT,EQIX VRT
-ASML,ASML,ASML,半導体製造装置,EUV露光装置,高性能AI半導体の製造に必要。最先端半導体の上流銘柄。,5,EUV 露光 半導体製造装置,AMAT LRCX NVDA
-AMAT,AMAT,Applied Materials,半導体製造装置,成膜・エッチングなど半導体製造装置,AI半導体投資が増えると製造装置需要に関係。,4,半導体製造装置 成膜 エッチング,ASML LRCX
-LRCX,LRCX,Lam Research,半導体製造装置,エッチング装置など,AI半導体の設備投資と関係。半導体サイクルも確認。,4,半導体製造装置 エッチング,ASML AMAT
-FCX,FCX,Freeport-McMoRan,素材,銅鉱山・銅生産,電線・送電・データセンター設備で銅需要に関係。電化の素材銘柄。,3,銅 資源 電線 送電,SCCO ETN PWR
-SCCO,SCCO,Southern Copper,素材,銅生産,電化・送電・データセンター拡大で銅需要に関係。銅価格との連動を見る。,3,銅 資源 電線,FCX
-ALB,ALB,Albemarle,素材,リチウム・電池材料,蓄電池や電力安定化の文脈で間接関連。AI電力インフラの補助テーマ。,3,リチウム 電池 蓄電,FCX
+ticker,yf_ticker,company,category,business,ai_relation,ai_score,keywords,related,official_ir_url
+NVDA,NVDA,NVIDIA,GPU,AI向けGPU・データセンター向け半導体,AI学習・推論の中心となるGPUを作る。AIサーバー需要の中心銘柄。,5,GPU AI 半導体 データセンター 推論 学習,"AMD,MU,ASML,VRT",https://investor.nvidia.com/
+AMD,AMD,AMD,GPU,GPU・CPU・AIアクセラレータ,AI向けGPUやサーバーCPUで関連。NVIDIAの対抗軸として見る。,4,GPU CPU AI 半導体,"NVDA,MU",https://ir.amd.com/
+MU,MU,Micron,メモリー,DRAM・NAND・HBM関連,AIサーバーに必要なメモリー需要と関係。HBMやDRAM需要を見る。,4,メモリー DRAM HBM NAND,"NVDA,AMD,000660.KS",https://investors.micron.com/
+000660.KS,000660.KS,SK hynix,メモリー,DRAM・NAND・HBM,AI向けHBMメモリーで重要。GPU周辺の重要部品として見る。,5,HBM DRAM メモリー,"MU,NVDA",https://www.skhynix.com/
+VRT,VRT,Vertiv,冷却,データセンター冷却・電源設備,AIデータセンター拡大で冷却・電源需要が増える。GPUの裏側銘柄。,5,冷却 電源 UPS データセンター,"TT,JCI,ETN,PWR",https://investors.vertiv.com/
+TT,TT,Trane Technologies,冷却,空調・冷却ソリューション,データセンター冷却需要に関係。空調・温度管理の視点で見る。,4,冷却 HVAC 空調,"VRT,JCI",https://investors.tranetechnologies.com/
+JCI,JCI,Johnson Controls,冷却,HVAC・ビル制御・冷却制御,施設管理と冷却制御で関連。データセンター設備の周辺銘柄。,3,HVAC 冷却 制御,"VRT,TT",https://investors.johnsoncontrols.com/
+ETN,ETN,Eaton,電力,電力管理・配電設備,データセンターの電力設備需要で関連。配電・電力管理の重要銘柄。,5,電力 配電 変圧器 データセンター,"VRT,HUBB,PWR",https://www.eaton.com/us/en-us/company/investor-relations.html
+HUBB,HUBB,Hubbell,電力,電設機器・配線機器,送電・配電・電設需要に関係。電力インフラ周辺銘柄。,4,電設 配線 電力,"ETN,PWR",https://investor.hubbell.com/
+PWR,PWR,Quanta Services,電力,電力インフラ建設・送電網,AIデータセンター向け電力インフラ整備で関連。送電網投資を見る。,4,送電 電力インフラ 建設,"ETN,HUBB,CEG",https://investors.quantaservices.com/
+CEG,CEG,Constellation Energy,原子力,原子力発電・電力供給,AIデータセンターの電力需要増で注目。大規模電源の代表格。,5,原子力 電力 データセンター,"SMR,ETN,PWR",https://investors.constellationenergy.com/
+SMR,SMR,NuScale Power,原子力,小型原子炉 SMR,将来のAIデータセンター向け電源候補として関連。期待先行にも注意。,4,SMR 原子力 小型原子炉,"CEG",https://www.nuscalepower.com/en/investors
+GLW,GLW,Corning,光通信,光ファイバー・特殊ガラス,AIデータセンター間通信や光通信インフラで関連。通信量増加を見る。,4,光ファイバー 光通信 ガラス,"LITE,COHR",https://investor.corning.com/
+LITE,LITE,Lumentum,光通信,光モジュール・光部品,データセンター光通信部品で関連。光モジュール需要を見る。,4,光部品 光通信 レーザー,"GLW,COHR",https://investor.lumentum.com/
+COHR,COHR,Coherent,光通信,光デバイス・レーザー・通信部品,高速光通信やレーザー部品で関連。データセンター通信部品の視点。,4,光通信 レーザー 光デバイス,"GLW,LITE",https://investors.coherent.com/
+EQIX,EQIX,Equinix,データセンター,データセンター運営 コロケーション,AI利用増でデータセンター需要が増える。インフラ側の代表銘柄。,5,データセンター REIT コロケーション,"DLR,VRT,ETN",https://investor.equinix.com/
+DLR,DLR,Digital Realty,データセンター,データセンター運営,AIサーバー需要増によりデータセンター需要と関係。REIT系として見る。,4,データセンター REIT,"EQIX,VRT",https://investor.digitalrealty.com/
+ASML,ASML,ASML,半導体製造装置,EUV露光装置,高性能AI半導体の製造に必要。最先端半導体の上流銘柄。,5,EUV 露光 半導体製造装置,"AMAT,LRCX,NVDA",https://www.asml.com/en/investors
+AMAT,AMAT,Applied Materials,半導体製造装置,成膜・エッチングなど半導体製造装置,AI半導体投資が増えると製造装置需要に関係。,4,半導体製造装置 成膜 エッチング,"ASML,LRCX",https://ir.appliedmaterials.com/
+LRCX,LRCX,Lam Research,半導体製造装置,エッチング装置など,AI半導体の設備投資と関係。半導体サイクルも確認。,4,半導体製造装置 エッチング,"ASML,AMAT",https://investor.lamresearch.com/
+FCX,FCX,Freeport-McMoRan,素材,銅鉱山・銅生産,電線・送電・データセンター設備で銅需要に関係。電化の素材銘柄。,3,銅 資源 電線 送電,"SCCO,ETN,PWR",https://investors.fcx.com/
+SCCO,SCCO,Southern Copper,素材,銅生産,電化・送電・データセンター拡大で銅需要に関係。銅価格との連動を見る。,3,銅 資源 電線,"FCX",https://southerncoppercorp.com/
+ALB,ALB,Albemarle,素材,リチウム・電池材料,蓄電池や電力安定化の文脈で間接関連。AI電力インフラの補助テーマ。,3,リチウム 電池 蓄電,"FCX",https://investors.albemarle.com/
+7203.T,7203.T,トヨタ自動車,日本AI関連,自動車・ソフトウェア・ロボティクス・電動化,自動運転・車載AI・ロボット・半導体需要の視点で関連を見る。,3,日本株 自動車 AI 自動運転 ロボット,"9984.T,6857.T",https://global.toyota/jp/ir/
+9984.T,9984.T,ソフトバンクグループ,日本AI関連,AI投資・半導体関連投資・通信,AI関連投資やArm関連でAIテーマと関係。,4,日本株 AI 投資 Arm 通信,"7203.T,6857.T",https://group.softbank/ir
+6857.T,6857.T,アドバンテスト,日本AI関連,半導体検査装置,AI半導体の検査工程に関係。GPUやHBM需要の裏側銘柄。,5,日本株 半導体検査装置 AI 半導体,"NVDA,ASML,AMAT",https://www.advantest.com/investors/

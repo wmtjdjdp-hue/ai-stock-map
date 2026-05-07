@@ -1,31 +1,25 @@
-# AI関連株コード辞典 v2
+# AI関連株コード辞典 v3 Links
 
-## 追加機能
-- yfinanceによる株価・PER・PBR・時価総額などの自動取得
-- Plotlyによる株価チャート
-- ティッカー検索
-- 関連図ハイライト
-- 関連銘柄表示
-- キーワード検索
-- カテゴリ表示
+## v3で追加した機能
+- 外部調査リンクボタン
+  - Yahoo Finance
+  - TradingView
+  - 株探
+  - 株探チャート
+  - 四季報オンライン
+  - バフェットコード
+  - バフェットコード財務
+  - IR BANK
+  - 公式IR
+- 日本株コード対応
+  - 7203.T のような yfinanceコードから 7203 を抽出してリンク作成
+- 公式IR URL列を stocks.csv に追加
 
-## ファイル
+## GitHubで更新するファイル
 - app.py
 - stocks.csv
 - requirements.txt
 - README.md
 
-## Streamlit Cloudで更新する方法
-GitHub上で以下3ファイルを上書きしてください。
-
-- app.py
-- stocks.csv
-- requirements.txt
-
-その後、Streamlit Cloud側で自動的に再起動されます。
-反映されない場合は、Streamlitの管理画面から Reboot app を押してください。
-
 ## 注意
-株価・PER・PBR・時価総額は yfinance 経由の参考データです。
-取得できない銘柄や項目があります。
-投資判断は自己責任でお願いします。
+外部サイトの中身はコピー表示せず、リンクボタンだけを生成します。

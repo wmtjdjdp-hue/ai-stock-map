@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v9", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v10", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v9
+# AI関連株コード辞典 v10
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -871,62 +871,102 @@ def make_virtual_row(ticker):
         "_virtual": True,
     })
 
-def show_add_to_db_hint(row):
+def auto_ai_relation_from_category(category, industry):
+    text = f"{category} {industry}".lower()
+
+    if any(k in text for k in ["semiconductor", "chip", "electronic", "technology"]):
+        return "半導体・電子部品・AIインフラの観点で関連候補。詳細は後で自分メモに追記。"
+    if any(k in text for k in ["telecom", "communication", "network", "wireless"]):
+        return "通信インフラ・クラウド接続・データセンター通信の観点でAI関連候補。"
+    if any(k in text for k in ["utility", "electric", "energy", "power"]):
+        return "AIデータセンターの電力需要・送電・発電インフラの観点で関連候補。"
+    if any(k in text for k in ["real estate", "reit", "data center"]):
+        return "データセンター・施設インフラの観点でAI関連候補。"
+    if any(k in text for k in ["software", "cloud", "internet", "services"]):
+        return "ソフトウェア・クラウド・AIサービス利用拡大の観点で関連候補。"
+    if any(k in text for k in ["industrial", "machinery", "engineering", "construction"]):
+        return "設備投資・インフラ・製造装置の観点でAI関連候補。"
+    if any(k in text for k in ["materials", "mining", "copper", "chemical"]):
+        return "素材・資源・電線・設備材料の観点でAIインフラ関連候補。"
+
+    return "取得分類からAI関連候補として仮登録。詳しい関連理由は後で自分メモに追記。"
+
+def show_add_to_db_hint(row, display_category=None, display_industry=None, display_business=None):
     if bool(row.get("_virtual", False)):
+        auto_category = display_category or row.get("category", "未分類") or "未分類"
+        auto_industry = display_industry or ""
+        auto_business = display_business or row.get("business", "")
+        auto_relation = auto_ai_relation_from_category(auto_category, auto_industry)
+        auto_keywords = f"{auto_category} {auto_industry} {row.get('company','')}"
+
         st.markdown(
-            """
+            f"""
             <div class="notice">
             <b>この銘柄はまだAI関連株DBには未登録です。</b><br>
-            株価・チャート・外部リンクは表示できます。<br>
-            AIカテゴリ、関連図、関連銘柄に入れたい場合は、下の「stocks.csvに追加する行」をコピーして追加してください。
+            ただし、外部データから取得できた情報を下に自動反映しました。<br>
+            そのまま一時登録するか、必要ならカテゴリを変えて登録できます。
             </div>
             """,
             unsafe_allow_html=True,
         )
-        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},未分類,事業内容を入力,AIとの関係を入力,3,キーワードを入力,"",'
+
+        st.markdown("### 🧩 自動取得から作った仮登録データ")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.write("**会社名**")
+            st.write(row.get("company", "未取得"))
+            st.write("**分類 / セクター**")
+            st.write(auto_category or "未取得")
+        with c2:
+            st.write("**業種**")
+            st.write(auto_industry or "未取得")
+            st.write("**AIとの仮関連メモ**")
+            st.write(auto_relation)
+
+        st.markdown("### 📌 AI関連図へ登録")
+        default_categories = sorted(set(
+            df["category"].dropna().astype(str).tolist()
+            + [x.get("category", "") for x in st.session_state.get("favorite_stocks", [])]
+            + ["GPU", "メモリー", "冷却", "電力", "原子力", "光通信", "データセンター", "半導体製造装置", "素材", "日本AI関連", "IT・通信", "未分類"]
+            + ([auto_category] if auto_category else [])
+        ))
+
+        default_index = 0
+        if auto_category in default_categories:
+            default_index = default_categories.index(auto_category)
+
+        cc1, cc2, cc3 = st.columns([2, 2, 1])
+        with cc1:
+            selected_category = st.selectbox(
+                "登録カテゴリ",
+                default_categories,
+                index=default_index,
+                key=f"auto_cat_{row['ticker']}",
+            )
+        with cc2:
+            custom_category = st.text_input(
+                "新カテゴリ名",
+                value="",
+                key=f"auto_custom_cat_{row['ticker']}",
+                placeholder="例：AI通信・クラウド",
+            )
+        with cc3:
+            ai_score = st.selectbox(
+                "AI関連度",
+                [1, 2, 3, 4, 5],
+                index=2,
+                key=f"auto_score_{row['ticker']}",
+            )
+
+        final_category = custom_category.strip() if custom_category.strip() else selected_category
+
+        if st.button("この取得情報でAI関連図に登録", key=f"auto_register_{row['ticker']}", use_container_width=True):
+            add_favorite_stock(row["ticker"], row["company"], final_category)
+            st.success(f'{row["ticker"]} を「{final_category}」に登録しました。左メニューの「AI関連図」で確認できます。')
+
+        st.markdown("### 📋 stocks.csvに追加する行")
+        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},{final_category},{auto_business},{auto_relation},{ai_score},{auto_keywords},"",'
         st.code(sample, language="csv")
-
-# -----------------------------
-# 表示
-# -----------------------------
-period_map = {"1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y", "5年": "5y"}
-
-def show_external_links(row):
-    st.subheader("🔎 外部調査リンク")
-    st.markdown(
-        """
-        <div class="notice">
-        <b>外部サイトの中身はコピーせず、リンクボタンだけを作ります。</b><br>
-        四季報・株探・バフェットコード等は、各サイトで直接確認するためのボタンです。
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    links = make_external_links(row)
-    cols = st.columns(3)
-    for i, (label, url) in enumerate(links):
-        with cols[i % 3]:
-            st.link_button(label, url, use_container_width=True)
-
-def show_source_table(source_map):
-    st.caption("各項目の取得元")
-    rows = []
-    for label, key in [
-        ("株価", "price"),
-        ("前日終値", "prev_close"),
-        ("前日比", "change_pct"),
-        ("時価総額", "market_cap"),
-        ("PER", "per"),
-        ("予想PER", "forward_pe"),
-        ("PBR", "pbr"),
-        ("予想PBR", "forward_pbr"),
-        ("52週高値", "fifty_two_high"),
-        ("52週安値", "fifty_two_low"),
-        ("配当利回り", "dividend_yield"),
-    ]:
-        rows.append({"項目": label, "取得元": source_map.get(key, "未取得")})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
 
 def show_favorite_register(row, display_category):
     st.subheader("⭐ AI関連図にお気に入り登録")
@@ -1008,7 +1048,7 @@ def show_stock_page(row):
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    show_add_to_db_hint(row)
+    show_add_to_db_hint(row, display_category, display_industry, display_business)
 
     show_external_links(row)
 
@@ -1109,8 +1149,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v9</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">AI関連図を縦スクロール専用レイアウトに改善。AIロゴを上部中央に配置した版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v10</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">未登録銘柄の取得情報を自動反映し、ワンクリックでAI関連図へ仮登録できる版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

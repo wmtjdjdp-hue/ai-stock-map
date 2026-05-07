@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v10", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v11", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v10
+# AI関連株コード辞典 v11
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -1011,6 +1011,27 @@ def show_favorite_register(row, display_category):
 
     st.caption("※ 現在のお気に入り登録はセッション内保存です。サイトを再起動すると消える場合があります。永続保存は次段階で追加できます。")
 
+
+def show_external_links(row):
+    st.subheader("🔎 外部調査リンク")
+    st.markdown(
+        """
+        <div class="notice">
+        <b>外部サイトの中身はコピーせず、リンクボタンだけを作ります。</b><br>
+        四季報・株探・バフェットコード等は、各サイトで直接確認するためのボタンです。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    try:
+        links = make_external_links(row)
+        cols = st.columns(3)
+        for i, (label, url) in enumerate(links):
+            with cols[i % 3]:
+                st.link_button(label, url, use_container_width=True)
+    except Exception as e:
+        st.warning(f"外部リンクの生成でエラーが出ました：{e}")
+
 def show_stock_page(row):
     combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
 
@@ -1050,7 +1071,10 @@ def show_stock_page(row):
 
     show_add_to_db_hint(row, display_category, display_industry, display_business)
 
-    show_external_links(row)
+    try:
+        show_external_links(row)
+    except Exception as e:
+        st.warning(f"外部リンク表示をスキップしました：{e}")
 
     show_favorite_register(row, display_category)
 
@@ -1149,8 +1173,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v10</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">未登録銘柄の取得情報を自動反映し、ワンクリックでAI関連図へ仮登録できる版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v11</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">未登録銘柄の自動反映エラーを修正し、外部リンク・自動取得データまで正常表示する版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

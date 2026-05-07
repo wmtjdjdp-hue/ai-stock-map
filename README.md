@@ -1,6 +1,12 @@
-# AI関連株コード辞典 v5 Multi Source + Finnhub
+# AI関連株コード辞典 v6 Any Ticker
 
-## v4で追加した機能
+## v6で追加した機能
+- stocks.csvに未登録のティッカーも検索可能
+- 未登録銘柄は仮データで表示
+- 株価・チャート・外部リンクはそのまま表示
+- stocks.csvに追加するためのCSVサンプル行を表示
+
+## 既存機能
 - yfinance + FMP + Alpha Vantage + Finnhub の複数ソース補完
 - 各項目の取得元表示
 - APIキー未設定でも yfinance のみで動作

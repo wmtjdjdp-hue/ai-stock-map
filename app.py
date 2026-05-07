@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v5", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v6", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v5
+# AI関連株コード辞典 v6
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -581,6 +581,68 @@ def make_mindmap_html(selected_ticker=None):
     """
     return html
 
+
+def make_virtual_row(ticker):
+    """
+    stocks.csvに未登録の銘柄でも表示できるようにする仮データ。
+    会社名や分類はAPI取得後に一部補完される。
+    """
+    t = str(ticker).strip().upper()
+    company = t
+    category = "未分類"
+    business = "この銘柄はまだstocks.csvに登録されていません。株価データと外部リンクのみ表示します。"
+    ai_relation = "AI関連度・カテゴリ・関連銘柄は未登録です。必要ならstocks.csvに追加してください。"
+    ai_score = 0
+    keywords = "未登録"
+    related = ""
+    official_ir_url = ""
+
+    try:
+        yf_data = get_yfinance_data(t)
+        if yf_data.get("sector") or yf_data.get("industry"):
+            category = yf_data.get("sector") or "未分類"
+            business = f'Yahoo Finance分類：{yf_data.get("sector", "")} / {yf_data.get("industry", "")}'
+        # yfinanceのinfoは重いので、ここでは最小限
+        try:
+            info = yf.Ticker(t).info or {}
+            company = info.get("longName") or info.get("shortName") or t
+            if info.get("sector") or info.get("industry"):
+                category = info.get("sector") or category
+                business = f'Yahoo Finance分類：{info.get("sector", "")} / {info.get("industry", "")}'
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+    return pd.Series({
+        "ticker": t,
+        "yf_ticker": t,
+        "company": company,
+        "category": category,
+        "business": business,
+        "ai_relation": ai_relation,
+        "ai_score": ai_score,
+        "keywords": keywords,
+        "related": related,
+        "official_ir_url": official_ir_url,
+        "_virtual": True,
+    })
+
+def show_add_to_db_hint(row):
+    if bool(row.get("_virtual", False)):
+        st.markdown(
+            """
+            <div class="notice">
+            <b>この銘柄はまだAI関連株DBには未登録です。</b><br>
+            株価・チャート・外部リンクは表示できます。<br>
+            AIカテゴリ、関連図、関連銘柄に入れたい場合は、下の「stocks.csvに追加する行」をコピーして追加してください。
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},未分類,事業内容を入力,AIとの関係を入力,3,キーワードを入力,"",'
+        st.code(sample, language="csv")
+
 # -----------------------------
 # 表示
 # -----------------------------
@@ -642,6 +704,8 @@ def show_stock_page(row):
             st.write("**分類**")
             st.write(f'{combined.get("sector","")} / {combined.get("industry","")}')
     st.markdown("</div>", unsafe_allow_html=True)
+
+    show_add_to_db_hint(row)
 
     show_external_links(row)
 
@@ -731,24 +795,27 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v5</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">yfinance + FMP + Alpha Vantage + Finnhub で自動データを補完する試作版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v6</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">登録外ティッカーにも対応。yfinance + FMP + Alpha Vantage + Finnhub で自動データを補完する版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "全銘柄一覧", "API設定確認"])
 period_label = st.sidebar.selectbox("チャート期間", ["1ヶ月", "3ヶ月", "6ヶ月", "1年", "5年"], index=2)
 st.sidebar.markdown("---")
 st.sidebar.caption("日本株例：7203.T / 9984.T / 6857.T")
-st.sidebar.caption("米国株例：NVDA / VRT / CEG")
+st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / TSLA")
 
 if mode == "ティッカー検索":
     ticker = st.text_input("ティッカーコードを入力", value="NVDA").strip().upper()
     hit = df[(df["ticker"] == ticker) | (df["yf_ticker"] == ticker)]
+
     if hit.empty:
-        st.error("そのティッカーはまだ登録されていません。stocks.csv に追加してください。")
-        st.dataframe(df[["ticker", "yf_ticker", "company", "category"]], use_container_width=True, hide_index=True)
+        virtual_row = make_virtual_row(ticker)
+        show_stock_page(virtual_row)
     else:
-        show_stock_page(hit.iloc[0])
+        row = hit.iloc[0].copy()
+        row["_virtual"] = False
+        show_stock_page(row)
 
 elif mode == "キーワード検索":
     keyword = st.text_input("キーワードを入力", value="冷却").strip()
@@ -810,5 +877,5 @@ with st.expander("🛠 銘柄データの追加・修正方法"):
     - `official_ir_url`：公式IRページURL。空欄でもOK
     - `related`：関連銘柄。カンマ区切り
 
-    無料APIは制限があるので、取得できない項目は「未取得」になります。
+    未登録ティッカーも検索できますが、AI分類・関連銘柄・関連図に入れるには stocks.csv に追加してください。無料APIは制限があるので、取得できない項目は「未取得」になります。
     """)

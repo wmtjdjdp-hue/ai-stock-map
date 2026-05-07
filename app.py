@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v13", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v14", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v13
+# AI関連株コード辞典 v14
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -54,6 +54,9 @@ def init_favorites():
         st.session_state.favorite_stocks = []
 
 init_favorites()
+
+if "last_ticker" not in st.session_state:
+    st.session_state.last_ticker = "NVDA"
 
 def add_favorite_stock(ticker, company, category):
     ticker = str(ticker).upper().strip()
@@ -1097,7 +1100,10 @@ def show_stock_page(row):
     except Exception as e:
         st.warning(f"外部リンク表示をスキップしました：{e}")
 
-    show_favorite_register(row, display_category)
+    # 未登録銘柄は show_add_to_db_hint 内で仮登録欄を出すので、
+    # 通常のお気に入り登録欄は登録済み銘柄だけ表示する。
+    if not bool(row.get("_virtual", False)):
+        show_favorite_register(row, display_category)
 
     st.subheader("📊 自動取得データ：複数ソース補完")
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
@@ -1200,8 +1206,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v13</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">v9安定版を土台に、未登録銘柄の自動仮登録だけを安全に追加した版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v14</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">登録欄の重複を修正し、最後に入力したティッカーを保持する版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
@@ -1212,7 +1218,16 @@ st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / T")
 st.sidebar.caption("AI関連図は左メニューから確認できます。")
 
 if mode == "ティッカー検索":
-    ticker = st.text_input("ティッカーコードを入力", value="NVDA").strip().upper()
+    ticker_input = st.text_input(
+        "ティッカーコードを入力",
+        value=st.session_state.get("last_ticker", "NVDA"),
+        key="ticker_search_input",
+    )
+    ticker = ticker_input.strip().upper()
+
+    if ticker:
+        st.session_state.last_ticker = ticker
+
     hit = df[(df["ticker"] == ticker) | (df["yf_ticker"] == ticker)]
 
     if hit.empty:

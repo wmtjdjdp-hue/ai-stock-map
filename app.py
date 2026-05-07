@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v6", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v8", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v6
+# AI関連株コード辞典 v8
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -45,6 +45,50 @@ def load_data():
 df = load_data()
 
 # -----------------------------
+# お気に入り登録：セッション内保存
+# 注意：Streamlit Community Cloudでは、ここでの登録はセッション内保存です。
+# 永続保存したい場合は、次段階でGoogle Sheets / Supabase / SQLite等に接続します。
+# -----------------------------
+def init_favorites():
+    if "favorite_stocks" not in st.session_state:
+        st.session_state.favorite_stocks = []
+
+init_favorites()
+
+def add_favorite_stock(ticker, company, category):
+    ticker = str(ticker).upper().strip()
+    company = str(company).strip()
+    category = str(category).strip() or "未分類"
+
+    # 同じティッカーが既にあればカテゴリを更新
+    updated = False
+    for item in st.session_state.favorite_stocks:
+        if item["ticker"].upper() == ticker:
+            item["company"] = company
+            item["category"] = category
+            updated = True
+            break
+
+    if not updated:
+        st.session_state.favorite_stocks.append({
+            "ticker": ticker,
+            "company": company,
+            "category": category,
+        })
+
+def remove_favorite_stock(ticker):
+    ticker = str(ticker).upper().strip()
+    st.session_state.favorite_stocks = [
+        x for x in st.session_state.favorite_stocks
+        if x["ticker"].upper() != ticker
+    ]
+
+def favorite_dataframe():
+    if not st.session_state.favorite_stocks:
+        return pd.DataFrame(columns=["ticker", "company", "category"])
+    return pd.DataFrame(st.session_state.favorite_stocks)
+
+# -----------------------------
 # Secrets
 # -----------------------------
 def get_secret(name):
@@ -75,12 +119,36 @@ def fmt_num(x, decimals=2):
     except Exception:
         return str(x)
 
+
+def currency_symbol(currency):
+    c = str(currency or "").upper()
+    symbols = {
+        "USD": "$",
+        "JPY": "¥",
+        "KRW": "₩",
+        "EUR": "€",
+        "GBP": "£",
+        "CAD": "C$",
+        "AUD": "A$",
+        "CHF": "CHF",
+        "HKD": "HK$",
+        "CNY": "¥",
+    }
+    return symbols.get(c, c + " " if c else "")
+
+def fmt_price_short(x, currency=""):
+    if x is None or x == "" or pd.isna(x):
+        return "未取得"
+    try:
+        return f"{currency_symbol(currency)}{float(x):,.2f}"
+    except Exception:
+        return str(x)
+
 def fmt_price(x, currency=""):
     if x is None or x == "" or pd.isna(x):
         return "未取得"
     try:
-        prefix = f"{currency} " if currency else ""
-        return f"{prefix}{float(x):,.2f}"
+        return f"{currency_symbol(currency)}{float(x):,.2f}"
     except Exception:
         return str(x)
 
@@ -106,6 +174,29 @@ def fmt_market_cap(x):
         return f"{x:,.0f}"
     except Exception:
         return str(x)
+
+
+def metric_card(label, value, sub=None):
+    sub_html = f'<div class="metric-sub">{sub}</div>' if sub else '<div class="metric-sub">&nbsp;</div>'
+    st.markdown(
+        f"""
+        <div class="metric-card">
+            <div class="metric-label2">{label}</div>
+            <div class="metric-value2">{value}</div>
+            {sub_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+def delta_text(change_pct):
+    if change_pct is None or change_pct == "" or pd.isna(change_pct):
+        return "前日比：未取得"
+    try:
+        sign = "+" if float(change_pct) >= 0 else ""
+        return f"前日比：{sign}{float(change_pct):.2f}%"
+    except Exception:
+        return f"前日比：{change_pct}"
 
 def pick_first(*values):
     for v in values:
@@ -524,6 +615,60 @@ st.markdown(
     .safe {background:#ecfdf5;border-left:5px solid #10b981;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
     .risk {background:#fff1f2;border-left:5px solid #e11d48;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
     .stMetric {background:#fff;border:1px solid #e5e7eb;padding:12px;border-radius:16px;box-shadow:0 3px 14px rgba(0,0,0,.04);}
+    .metric-card {
+        background:#fff;
+        border:1px solid #e5e7eb;
+        border-radius:16px;
+        padding:12px 14px;
+        min-height:96px;
+        box-shadow:0 3px 14px rgba(0,0,0,.04);
+        overflow:hidden;
+        margin-bottom:10px;
+    }
+    .metric-label2 {
+        color:#64748b;
+        font-size:13px;
+        font-weight:800;
+        margin-bottom:6px;
+        white-space:nowrap;
+    }
+    .metric-value2 {
+        color:#111827;
+        font-size:clamp(20px, 2.8vw, 32px);
+        font-weight:850;
+        line-height:1.05;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    .metric-sub {
+        color:#64748b;
+        font-size:12px;
+        font-weight:700;
+        margin-top:6px;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+    }
+    .profile-grid {
+        background:#f8fafc;
+        border:1px solid #e5e7eb;
+        border-radius:16px;
+        padding:12px 14px;
+        margin-top:10px;
+        margin-bottom:10px;
+    }
+    .profile-title {
+        font-weight:900;
+        color:#111827;
+        margin-bottom:6px;
+    }
+    .profile-row {
+        color:#334155;
+        font-size:14px;
+        line-height:1.6;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -533,7 +678,7 @@ st.markdown(
 # 関連図
 # -----------------------------
 def make_mindmap_html(selected_ticker=None):
-    categories = [
+    base_categories = [
         ("GPU", ["NVDA", "AMD"]),
         ("メモリー", ["MU", "000660.KS"]),
         ("冷却", ["VRT", "TT", "JCI"]),
@@ -545,9 +690,27 @@ def make_mindmap_html(selected_ticker=None):
         ("素材", ["FCX", "SCCO", "ALB"]),
         ("日本AI関連", ["7203.T", "9984.T", "6857.T"]),
     ]
+
+    # お気に入り登録された銘柄を、選択カテゴリへ追加
+    category_map = {cat: list(tickers) for cat, tickers in base_categories}
+    favorite_lookup = {}
+
+    for item in st.session_state.get("favorite_stocks", []):
+        cat = item.get("category", "未分類") or "未分類"
+        ticker = item.get("ticker", "").upper()
+        company = item.get("company", "")
+        if not ticker:
+            continue
+        if cat not in category_map:
+            category_map[cat] = []
+        if ticker not in category_map[cat]:
+            category_map[cat].append(ticker)
+        favorite_lookup[ticker] = company
+
     selected = selected_ticker.upper() if selected_ticker else ""
     blocks = []
-    for cat, tickers in categories:
+
+    for cat, tickers in category_map.items():
         items = []
         for t in tickers:
             hit = df[(df["ticker"] == t) | (df["yf_ticker"] == t)]
@@ -557,10 +720,14 @@ def make_mindmap_html(selected_ticker=None):
                 name = row["company"]
             else:
                 display_ticker = t
-                name = ""
+                name = favorite_lookup.get(t, "")
+
             active = " active" if selected in [display_ticker.upper(), t.upper()] else ""
             items.append(f'<div class="node stock{active}">{display_ticker}<br><small>{name}</small></div>')
-        blocks.append(f"<div class='branch'><div class='node category'>{cat}</div><div class='stocks'>{''.join(items)}</div></div>")
+
+        blocks.append(
+            f"<div class='branch'><div class='node category'>{cat}</div><div class='stocks'>{''.join(items)}</div></div>"
+        )
 
     html = f"""
     <html><head><style>
@@ -684,30 +851,92 @@ def show_source_table(source_map):
         rows.append({"項目": label, "取得元": source_map.get(key, "未取得")})
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
+
+def show_favorite_register(row, display_category):
+    st.subheader("⭐ AI関連図にお気に入り登録")
+
+    default_categories = sorted(set(
+        df["category"].dropna().astype(str).tolist()
+        + [x.get("category", "") for x in st.session_state.get("favorite_stocks", [])]
+        + ["GPU", "メモリー", "冷却", "電力", "原子力", "光通信", "データセンター", "半導体製造装置", "素材", "日本AI関連", "未分類"]
+    ))
+
+    default_index = 0
+    if display_category in default_categories:
+        default_index = default_categories.index(display_category)
+
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        selected_category = st.selectbox(
+            "登録するカテゴリ",
+            default_categories,
+            index=default_index,
+            key=f"fav_cat_{row['ticker']}",
+        )
+    with c2:
+        custom_category = st.text_input(
+            "新カテゴリを作る場合",
+            value="",
+            key=f"fav_custom_{row['ticker']}",
+            placeholder="例：AI通信・クラウド",
+        )
+
+    final_category = custom_category.strip() if custom_category.strip() else selected_category
+
+    b1, b2 = st.columns([1, 1])
+    with b1:
+        if st.button("この銘柄をAI関連図に登録", key=f"fav_add_{row['ticker']}", use_container_width=True):
+            add_favorite_stock(row["ticker"], row["company"], final_category)
+            st.success(f'{row["ticker"]} を「{final_category}」に登録しました。左メニューの「AI関連図」で確認できます。')
+    with b2:
+        if st.button("この銘柄を登録解除", key=f"fav_remove_{row['ticker']}", use_container_width=True):
+            remove_favorite_stock(row["ticker"])
+            st.info(f'{row["ticker"]} をお気に入りから解除しました。')
+
+    st.caption("※ 現在のお気に入り登録はセッション内保存です。サイトを再起動すると消える場合があります。永続保存は次段階で追加できます。")
+
 def show_stock_page(row):
     combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
+
+    # 未登録銘柄でも、取得できた分類を優先して表示
+    display_category = row.get("category", "未分類")
+    if bool(row.get("_virtual", False)) and combined.get("sector"):
+        display_category = combined.get("sector")
+    display_industry = combined.get("industry", "")
+    display_business = row.get("business", "")
+    if bool(row.get("_virtual", False)) and (combined.get("sector") or combined.get("industry")):
+        display_business = f"取得分類：{combined.get('sector','')} / {combined.get('industry','')}"
 
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
     col1, col2 = st.columns([1.1, 2])
     with col1:
         st.markdown(f'<div class="hero-ticker">{row["ticker"]}</div>', unsafe_allow_html=True)
         st.markdown(f'<div class="hero-company">{row["company"]}</div>', unsafe_allow_html=True)
-        st.markdown(f'<span class="badge">{row["category"]}</span>', unsafe_allow_html=True)
+        st.markdown(f'<span class="badge">{display_category}</span>', unsafe_allow_html=True)
         st.markdown(f'<span class="badge">AI関連度 {stars(row["ai_score"])}</span>', unsafe_allow_html=True)
         st.markdown(f'<span class="badge">取得コード {row["yf_ticker"]}</span>', unsafe_allow_html=True)
     with col2:
         st.write("**何を作るか / 事業内容**")
-        st.write(row["business"])
+        st.write(display_business)
         st.write("**AIとのつながり**")
         st.write(row["ai_relation"])
-        if combined.get("sector") or combined.get("industry"):
-            st.write("**分類**")
-            st.write(f'{combined.get("sector","")} / {combined.get("industry","")}')
+        st.markdown(
+            f"""
+            <div class="profile-grid">
+                <div class="profile-title">分類</div>
+                <div class="profile-row"><b>セクター：</b>{display_category or "未取得"}</div>
+                <div class="profile-row"><b>業種：</b>{display_industry or "未取得"}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
     show_add_to_db_hint(row)
 
     show_external_links(row)
+
+    show_favorite_register(row, display_category)
 
     st.subheader("📊 自動取得データ：複数ソース補完")
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
@@ -739,27 +968,39 @@ def show_stock_page(row):
         )
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("株価", fmt_price(combined["price"], combined["currency"]), fmt_percent(combined["change_pct"]))
-    c2.metric("時価総額", fmt_market_cap(combined["market_cap"]))
-    c3.metric("PER", fmt_num(combined["per"]))
-    c4.metric("予想PER", fmt_num(combined["forward_pe"]))
-    c5.metric("PBR", fmt_num(combined["pbr"]))
+    with c1:
+        metric_card("株価", fmt_price(combined["price"], combined["currency"]), delta_text(combined["change_pct"]))
+    with c2:
+        metric_card("時価総額", fmt_market_cap(combined["market_cap"]), f'取得元：{source_map.get("market_cap", "未取得")}')
+    with c3:
+        metric_card("PER", fmt_num(combined["per"]), f'取得元：{source_map.get("per", "未取得")}')
+    with c4:
+        metric_card("予想PER", fmt_num(combined["forward_pe"]), f'取得元：{source_map.get("forward_pe", "未取得")}')
+    with c5:
+        metric_card("PBR", fmt_num(combined["pbr"]), f'取得元：{source_map.get("pbr", "未取得")}')
 
-    c6, c7, c8, c9 = st.columns(4)
-    c6.metric("前日終値", fmt_price(combined["prev_close"], combined["currency"]))
-    c7.metric("52週高値", fmt_price(combined["fifty_two_high"], combined["currency"]))
-    c8.metric("52週安値", fmt_price(combined["fifty_two_low"], combined["currency"]))
     dy = None
     if combined["dividend_yield"] is not None:
         try:
             dy = float(combined["dividend_yield"]) * 100 if float(combined["dividend_yield"]) < 1 else float(combined["dividend_yield"])
         except Exception:
             dy = combined["dividend_yield"]
-    c9.metric("配当利回り", fmt_percent(dy))
+
+    c6, c7, c8, c9 = st.columns(4)
+    with c6:
+        metric_card("前日終値", fmt_price(combined["prev_close"], combined["currency"]), f'取得元：{source_map.get("prev_close", "未取得")}')
+    with c7:
+        metric_card("52週高値", fmt_price(combined["fifty_two_high"], combined["currency"]), f'取得元：{source_map.get("fifty_two_high", "未取得")}')
+    with c8:
+        metric_card("52週安値", fmt_price(combined["fifty_two_low"], combined["currency"]), f'取得元：{source_map.get("fifty_two_low", "未取得")}')
+    with c9:
+        metric_card("配当利回り", fmt_percent(dy), f'取得元：{source_map.get("dividend_yield", "未取得")}')
 
     c10, c11 = st.columns(2)
-    c10.metric("予想PBR", fmt_num(combined["forward_pbr"]))
-    c11.metric("データ取得コード", row["yf_ticker"])
+    with c10:
+        metric_card("予想PBR", fmt_num(combined["forward_pbr"]), "無料APIでは未取得になりやすい")
+    with c11:
+        metric_card("データ取得コード", row["yf_ticker"], "yfinance / API用コード")
 
     with st.expander("📌 取得元を確認する"):
         show_source_table(source_map)
@@ -777,9 +1018,6 @@ def show_stock_page(row):
         fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("🗺 AI関連図")
-    components.html(make_mindmap_html(row["ticker"]), height=560, scrolling=True)
-
     st.subheader("🔗 関連銘柄")
     related = [x.strip().upper() for x in str(row["related"]).split(",") if x.strip()]
     related_df = df[df["ticker"].isin(related) | df["yf_ticker"].isin(related)]
@@ -795,15 +1033,16 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v6</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">登録外ティッカーにも対応。yfinance + FMP + Alpha Vantage + Finnhub で自動データを補完する版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v8</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">AI関連図を操作メニューへ移動。検索した銘柄をカテゴリ別にお気に入り登録できる版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
-mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "全銘柄一覧", "API設定確認"])
+mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
 period_label = st.sidebar.selectbox("チャート期間", ["1ヶ月", "3ヶ月", "6ヶ月", "1年", "5年"], index=2)
 st.sidebar.markdown("---")
 st.sidebar.caption("日本株例：7203.T / 9984.T / 6857.T")
-st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / TSLA")
+st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / T")
+st.sidebar.caption("AI関連図は左メニューから確認できます。")
 
 if mode == "ティッカー検索":
     ticker = st.text_input("ティッカーコードを入力", value="NVDA").strip().upper()
@@ -841,7 +1080,30 @@ elif mode == "カテゴリ表示":
     result = df[df["category"] == category]
     st.subheader(f"カテゴリ：{category}")
     st.dataframe(result[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
-    components.html(make_mindmap_html(), height=560, scrolling=True)
+
+elif mode == "AI関連図":
+    st.subheader("🗺 AI関連図")
+    st.markdown(
+        """
+        <div class="notice">
+        検索した銘柄を「AI関連図にお気に入り登録」すると、ここで選んだカテゴリの中に追加表示されます。<br>
+        現在はセッション内保存です。永続保存したい場合は、次にGoogle SheetsやSupabase連携を追加します。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    components.html(make_mindmap_html(), height=700, scrolling=True)
+
+    st.subheader("⭐ お気に入り登録済み銘柄")
+    fav_df = favorite_dataframe()
+    if fav_df.empty:
+        st.info("まだお気に入り登録された銘柄はありません。ティッカー検索から登録してください。")
+    else:
+        st.dataframe(fav_df, use_container_width=True, hide_index=True)
+        remove_target = st.selectbox("解除する銘柄を選択", fav_df["ticker"].tolist())
+        if st.button("選択した銘柄を解除", use_container_width=True):
+            remove_favorite_stock(remove_target)
+            st.success(f"{remove_target} を解除しました。画面を再読み込みすると反映されます。")
 
 elif mode == "全銘柄一覧":
     st.subheader("登録銘柄一覧")

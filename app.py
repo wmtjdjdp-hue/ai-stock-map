@@ -1,13 +1,34 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit.components.v1 as components
 from pathlib import Path
 from urllib.parse import quote_plus
+import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v3", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v4", page_icon="📈", layout="wide")
 
+# ============================================================
+# AI関連株コード辞典 v4
+# 目的：
+# yfinanceを中心に、Alpha Vantage / FMP の無料APIを補助として使う構造
+#
+# 優先順位：
+# 1. yfinance
+# 2. FMP_API_KEY があれば Financial Modeling Prep
+# 3. ALPHAVANTAGE_API_KEY があれば Alpha Vantage
+# 4. 取れなければ「未取得」
+#
+# Streamlit Cloud の Secrets に入れる例：
+# FMP_API_KEY = "あなたのFMPキー"
+# ALPHAVANTAGE_API_KEY = "あなたのAlpha Vantageキー"
+# ============================================================
+
+# -----------------------------
+# データ読み込み
+# -----------------------------
 @st.cache_data
 def load_data():
     path = Path(__file__).parent / "stocks.csv"
@@ -21,80 +42,21 @@ def load_data():
 
 df = load_data()
 
-@st.cache_data(ttl=1800)
-def get_history(yf_ticker, period):
+# -----------------------------
+# Secrets
+# -----------------------------
+def get_secret(name):
     try:
-        hist = yf.Ticker(yf_ticker).history(period=period)
-        if hist is None or hist.empty:
-            return pd.DataFrame()
-        return hist.reset_index()
+        return st.secrets.get(name, "")
     except Exception:
-        return pd.DataFrame()
+        return ""
 
-@st.cache_data(ttl=1800)
-def get_stock_info(yf_ticker):
-    result = {
-        "price": None,
-        "prev_close": None,
-        "change_pct": None,
-        "market_cap": None,
-        "trailing_pe": None,
-        "forward_pe": None,
-        "price_to_book": None,
-        "fifty_two_high": None,
-        "fifty_two_low": None,
-        "dividend_yield": None,
-        "currency": "",
-        "sector": "",
-        "industry": "",
-    }
+FMP_API_KEY = get_secret("FMP_API_KEY")
+ALPHAVANTAGE_API_KEY = get_secret("ALPHAVANTAGE_API_KEY")
 
-    try:
-        t = yf.Ticker(yf_ticker)
-
-        try:
-            fast = t.fast_info
-            result["price"] = getattr(fast, "last_price", None) or fast.get("last_price")
-            result["prev_close"] = getattr(fast, "previous_close", None) or fast.get("previous_close")
-            result["market_cap"] = getattr(fast, "market_cap", None) or fast.get("market_cap")
-            result["currency"] = getattr(fast, "currency", "") or fast.get("currency", "")
-        except Exception:
-            pass
-
-        try:
-            info = t.info or {}
-            result["price"] = result["price"] or info.get("currentPrice") or info.get("regularMarketPrice")
-            result["prev_close"] = result["prev_close"] or info.get("previousClose")
-            result["market_cap"] = result["market_cap"] or info.get("marketCap")
-            result["trailing_pe"] = info.get("trailingPE")
-            result["forward_pe"] = info.get("forwardPE")
-            result["price_to_book"] = info.get("priceToBook")
-            result["fifty_two_high"] = info.get("fiftyTwoWeekHigh")
-            result["fifty_two_low"] = info.get("fiftyTwoWeekLow")
-            result["dividend_yield"] = info.get("dividendYield")
-            result["currency"] = result["currency"] or info.get("currency", "")
-            result["sector"] = info.get("sector", "")
-            result["industry"] = info.get("industry", "")
-        except Exception:
-            pass
-
-        if result["price"] is None or result["prev_close"] is None:
-            hist = t.history(period="5d")
-            if hist is not None and not hist.empty:
-                closes = hist["Close"].dropna().tolist()
-                if len(closes) >= 1 and result["price"] is None:
-                    result["price"] = closes[-1]
-                if len(closes) >= 2 and result["prev_close"] is None:
-                    result["prev_close"] = closes[-2]
-
-        if result["price"] is not None and result["prev_close"] not in [None, 0]:
-            result["change_pct"] = (float(result["price"]) - float(result["prev_close"])) / float(result["prev_close"]) * 100
-
-    except Exception:
-        pass
-
-    return result
-
+# -----------------------------
+# 共通フォーマット
+# -----------------------------
 def stars(n):
     try:
         n = int(n)
@@ -103,7 +65,7 @@ def stars(n):
     return "★" * n + "☆" * (5 - n)
 
 def fmt_num(x, decimals=2):
-    if x is None or pd.isna(x):
+    if x is None or x == "" or pd.isna(x):
         return "未取得"
     try:
         return f"{float(x):,.{decimals}f}"
@@ -111,17 +73,16 @@ def fmt_num(x, decimals=2):
         return str(x)
 
 def fmt_price(x, currency=""):
-    if x is None or pd.isna(x):
+    if x is None or x == "" or pd.isna(x):
         return "未取得"
     try:
-        if currency:
-            return f"{currency} {float(x):,.2f}"
-        return f"{float(x):,.2f}"
+        prefix = f"{currency} " if currency else ""
+        return f"{prefix}{float(x):,.2f}"
     except Exception:
         return str(x)
 
 def fmt_percent(x):
-    if x is None or pd.isna(x):
+    if x is None or x == "" or pd.isna(x):
         return "未取得"
     try:
         return f"{float(x):+.2f}%"
@@ -129,7 +90,7 @@ def fmt_percent(x):
         return str(x)
 
 def fmt_market_cap(x):
-    if x is None or pd.isna(x):
+    if x is None or x == "" or pd.isna(x):
         return "未取得"
     try:
         x = float(x)
@@ -143,6 +104,23 @@ def fmt_market_cap(x):
     except Exception:
         return str(x)
 
+def pick_first(*values):
+    for v in values:
+        if v is not None and v != "" and not (isinstance(v, float) and pd.isna(v)):
+            return v
+    return None
+
+def is_us_like_ticker(ticker):
+    t = str(ticker).upper()
+    return "." not in t and t.isalpha()
+
+def to_alpha_symbol(yf_ticker):
+    # Alpha Vantage/FMP用。日本株や韓国株はまず対象外扱い。
+    t = str(yf_ticker).upper().strip()
+    if "." in t:
+        return ""
+    return t
+
 def jp_code(yf_ticker):
     t = str(yf_ticker).upper().strip()
     if t.endswith(".T"):
@@ -153,6 +131,262 @@ def jp_code(yf_ticker):
         return t
     return ""
 
+# -----------------------------
+# yfinance
+# -----------------------------
+@st.cache_data(ttl=1800)
+def get_yf_history(yf_ticker, period):
+    try:
+        hist = yf.Ticker(yf_ticker).history(period=period)
+        if hist is None or hist.empty:
+            return pd.DataFrame()
+        return hist.reset_index()
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=1800)
+def get_yfinance_data(yf_ticker):
+    result = {
+        "source": "yfinance",
+        "price": None,
+        "prev_close": None,
+        "change_pct": None,
+        "market_cap": None,
+        "per": None,
+        "forward_pe": None,
+        "pbr": None,
+        "forward_pbr": None,
+        "fifty_two_high": None,
+        "fifty_two_low": None,
+        "dividend_yield": None,
+        "currency": "",
+        "sector": "",
+        "industry": "",
+    }
+
+    try:
+        t = yf.Ticker(yf_ticker)
+
+        # fast_info
+        try:
+            fast = t.fast_info
+            result["price"] = getattr(fast, "last_price", None) or fast.get("last_price")
+            result["prev_close"] = getattr(fast, "previous_close", None) or fast.get("previous_close")
+            result["market_cap"] = getattr(fast, "market_cap", None) or fast.get("market_cap")
+            result["currency"] = getattr(fast, "currency", "") or fast.get("currency", "")
+        except Exception:
+            pass
+
+        # info
+        try:
+            info = t.info or {}
+            result["price"] = pick_first(result["price"], info.get("currentPrice"), info.get("regularMarketPrice"))
+            result["prev_close"] = pick_first(result["prev_close"], info.get("previousClose"))
+            result["market_cap"] = pick_first(result["market_cap"], info.get("marketCap"))
+            result["per"] = pick_first(info.get("trailingPE"))
+            result["forward_pe"] = pick_first(info.get("forwardPE"))
+            result["pbr"] = pick_first(info.get("priceToBook"))
+            result["fifty_two_high"] = pick_first(info.get("fiftyTwoWeekHigh"))
+            result["fifty_two_low"] = pick_first(info.get("fiftyTwoWeekLow"))
+            result["dividend_yield"] = pick_first(info.get("dividendYield"))
+            result["currency"] = pick_first(result["currency"], info.get("currency"), "")
+            result["sector"] = pick_first(info.get("sector"), "")
+            result["industry"] = pick_first(info.get("industry"), "")
+        except Exception:
+            pass
+
+        # history backup
+        if result["price"] is None or result["prev_close"] is None:
+            hist = t.history(period="5d")
+            if hist is not None and not hist.empty:
+                closes = hist["Close"].dropna().tolist()
+                if len(closes) >= 1:
+                    result["price"] = pick_first(result["price"], closes[-1])
+                if len(closes) >= 2:
+                    result["prev_close"] = pick_first(result["prev_close"], closes[-2])
+
+        if result["price"] is not None and result["prev_close"] not in [None, 0]:
+            result["change_pct"] = (float(result["price"]) - float(result["prev_close"])) / float(result["prev_close"]) * 100
+
+    except Exception:
+        pass
+
+    return result
+
+# -----------------------------
+# Financial Modeling Prep
+# -----------------------------
+@st.cache_data(ttl=3600)
+def get_fmp_data(symbol, api_key):
+    result = {
+        "source": "FMP",
+        "price": None,
+        "prev_close": None,
+        "change_pct": None,
+        "market_cap": None,
+        "per": None,
+        "forward_pe": None,
+        "pbr": None,
+        "forward_pbr": None,
+        "fifty_two_high": None,
+        "fifty_two_low": None,
+        "dividend_yield": None,
+        "currency": "USD",
+        "sector": "",
+        "industry": "",
+    }
+
+    if not api_key or not symbol:
+        return result
+
+    try:
+        # profile endpoint
+        url = f"https://financialmodelingprep.com/api/v3/profile/{symbol}?apikey={api_key}"
+        r = requests.get(url, timeout=10)
+        if r.ok:
+            data = r.json()
+            if isinstance(data, list) and data:
+                p = data[0]
+                result["price"] = pick_first(p.get("price"))
+                result["market_cap"] = pick_first(p.get("mktCap"))
+                result["currency"] = pick_first(p.get("currency"), "USD")
+                result["sector"] = pick_first(p.get("sector"), "")
+                result["industry"] = pick_first(p.get("industry"), "")
+                result["fifty_two_high"] = pick_first(p.get("range", "").split("-")[-1].strip() if isinstance(p.get("range"), str) and "-" in p.get("range") else None)
+                result["fifty_two_low"] = pick_first(p.get("range", "").split("-")[0].strip() if isinstance(p.get("range"), str) and "-" in p.get("range") else None)
+
+        # ratios ttm endpoint
+        url = f"https://financialmodelingprep.com/api/v3/ratios-ttm/{symbol}?apikey={api_key}"
+        r = requests.get(url, timeout=10)
+        if r.ok:
+            data = r.json()
+            if isinstance(data, list) and data:
+                rr = data[0]
+                result["per"] = pick_first(rr.get("peRatioTTM"))
+                result["pbr"] = pick_first(rr.get("priceToBookRatioTTM"))
+                dy = pick_first(rr.get("dividendYielTTM"), rr.get("dividendYieldTTM"))
+                result["dividend_yield"] = dy
+
+        # quote endpoint
+        url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={api_key}"
+        r = requests.get(url, timeout=10)
+        if r.ok:
+            data = r.json()
+            if isinstance(data, list) and data:
+                q = data[0]
+                result["price"] = pick_first(result["price"], q.get("price"))
+                result["prev_close"] = pick_first(q.get("previousClose"))
+                result["change_pct"] = pick_first(q.get("changesPercentage"))
+                result["market_cap"] = pick_first(result["market_cap"], q.get("marketCap"))
+                result["per"] = pick_first(result["per"], q.get("pe"))
+                result["fifty_two_high"] = pick_first(result["fifty_two_high"], q.get("yearHigh"))
+                result["fifty_two_low"] = pick_first(result["fifty_two_low"], q.get("yearLow"))
+
+    except Exception:
+        pass
+
+    return result
+
+# -----------------------------
+# Alpha Vantage
+# -----------------------------
+@st.cache_data(ttl=3600)
+def get_alpha_data(symbol, api_key):
+    result = {
+        "source": "Alpha Vantage",
+        "price": None,
+        "prev_close": None,
+        "change_pct": None,
+        "market_cap": None,
+        "per": None,
+        "forward_pe": None,
+        "pbr": None,
+        "forward_pbr": None,
+        "fifty_two_high": None,
+        "fifty_two_low": None,
+        "dividend_yield": None,
+        "currency": "USD",
+        "sector": "",
+        "industry": "",
+    }
+
+    if not api_key or not symbol:
+        return result
+
+    try:
+        # GLOBAL_QUOTE
+        url = "https://www.alphavantage.co/query"
+        params = {"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": api_key}
+        r = requests.get(url, params=params, timeout=10)
+        if r.ok:
+            data = r.json().get("Global Quote", {})
+            result["price"] = pick_first(data.get("05. price"))
+            result["prev_close"] = pick_first(data.get("08. previous close"))
+            result["change_pct"] = pick_first(str(data.get("10. change percent", "")).replace("%", ""))
+
+        # OVERVIEW
+        params = {"function": "OVERVIEW", "symbol": symbol, "apikey": api_key}
+        r = requests.get(url, params=params, timeout=10)
+        if r.ok:
+            data = r.json()
+            result["market_cap"] = pick_first(data.get("MarketCapitalization"))
+            result["per"] = pick_first(data.get("PERatio"))
+            result["forward_pe"] = pick_first(data.get("ForwardPE"))
+            result["pbr"] = pick_first(data.get("PriceToBookRatio"))
+            result["fifty_two_high"] = pick_first(data.get("52WeekHigh"))
+            result["fifty_two_low"] = pick_first(data.get("52WeekLow"))
+            result["dividend_yield"] = pick_first(data.get("DividendYield"))
+            result["sector"] = pick_first(data.get("Sector"), "")
+            result["industry"] = pick_first(data.get("Industry"), "")
+
+    except Exception:
+        pass
+
+    return result
+
+# -----------------------------
+# 複数データ源を合成
+# -----------------------------
+@st.cache_data(ttl=1800)
+def get_combined_data(yf_ticker, fmp_key, alpha_key):
+    yf_data = get_yfinance_data(yf_ticker)
+
+    symbol = to_alpha_symbol(yf_ticker)
+    fmp_data = get_fmp_data(symbol, fmp_key) if symbol else {}
+    alpha_data = get_alpha_data(symbol, alpha_key) if symbol else {}
+
+    result = {}
+    source_map = {}
+
+    keys = [
+        "price", "prev_close", "change_pct", "market_cap",
+        "per", "forward_pe", "pbr", "forward_pbr",
+        "fifty_two_high", "fifty_two_low", "dividend_yield",
+        "currency", "sector", "industry"
+    ]
+
+    # 優先順位は yfinance -> FMP -> Alpha Vantage
+    for k in keys:
+        candidates = [
+            ("yfinance", yf_data.get(k)),
+            ("FMP", fmp_data.get(k) if fmp_data else None),
+            ("Alpha Vantage", alpha_data.get(k) if alpha_data else None),
+        ]
+        value = None
+        src = ""
+        for name, v in candidates:
+            if v is not None and v != "" and not (isinstance(v, float) and pd.isna(v)):
+                value = v
+                src = name
+                break
+        result[k] = value
+        source_map[k] = src if value is not None and value != "" else "未取得"
+
+    return result, source_map, yf_data, fmp_data, alpha_data
+
+# -----------------------------
+# 外部リンク
+# -----------------------------
 def make_external_links(row):
     ticker = str(row["ticker"]).upper().strip()
     yf_ticker = str(row["yf_ticker"]).upper().strip()
@@ -161,7 +395,6 @@ def make_external_links(row):
     q = quote_plus(f"{ticker} {company}")
 
     links = []
-
     links.append(("Yahoo Finance", f"https://finance.yahoo.com/quote/{yf_ticker}"))
     links.append(("TradingView", f"https://www.tradingview.com/symbols/{yf_ticker.replace('.', '-')}/"))
     links.append(("Google検索", f"https://www.google.com/search?q={q}+stock"))
@@ -185,6 +418,9 @@ def make_external_links(row):
 
     return links
 
+# -----------------------------
+# CSS
+# -----------------------------
 st.markdown(
     """
     <style>
@@ -194,8 +430,8 @@ st.markdown(
     .hero-ticker {font-size:42px;font-weight:900;line-height:1.0;}
     .hero-company {font-size:22px;color:#e5e7eb;margin-top:6px;margin-bottom:12px;}
     .badge {display:inline-block;background:rgba(255,255,255,.14);color:white;padding:7px 11px;border-radius:999px;margin:4px 6px 4px 0;font-size:13px;border:1px solid rgba(255,255,255,.18);}
-    .link-card {background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:14px;margin-bottom:12px;}
     .notice {background:#fff7d6;border-left:5px solid #f59e0b;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
+    .safe {background:#ecfdf5;border-left:5px solid #10b981;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
     .risk {background:#fff1f2;border-left:5px solid #e11d48;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
     .stMetric {background:#fff;border:1px solid #e5e7eb;padding:12px;border-radius:16px;box-shadow:0 3px 14px rgba(0,0,0,.04);}
     </style>
@@ -203,6 +439,9 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# -----------------------------
+# 関連図
+# -----------------------------
 def make_mindmap_html(selected_ticker=None):
     categories = [
         ("GPU", ["NVDA", "AMD"]),
@@ -252,13 +491,18 @@ def make_mindmap_html(selected_ticker=None):
     """
     return html
 
+# -----------------------------
+# 表示
+# -----------------------------
+period_map = {"1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y", "5年": "5y"}
+
 def show_external_links(row):
     st.subheader("🔎 外部調査リンク")
     st.markdown(
         """
         <div class="notice">
-        <b>このエリアは外部サイトへのリンクだけを作ります。</b><br>
-        四季報・株探・バフェットコード等の中身をコピー表示せず、各サイトで確認するためのボタンです。
+        <b>外部サイトの中身はコピーせず、リンクボタンだけを作ります。</b><br>
+        四季報・株探・バフェットコード等は、各サイトで直接確認するためのボタンです。
         </div>
         """,
         unsafe_allow_html=True,
@@ -269,8 +513,27 @@ def show_external_links(row):
         with cols[i % 3]:
             st.link_button(label, url, use_container_width=True)
 
+def show_source_table(source_map):
+    st.caption("各項目の取得元")
+    rows = []
+    for label, key in [
+        ("株価", "price"),
+        ("前日終値", "prev_close"),
+        ("前日比", "change_pct"),
+        ("時価総額", "market_cap"),
+        ("PER", "per"),
+        ("予想PER", "forward_pe"),
+        ("PBR", "pbr"),
+        ("予想PBR", "forward_pbr"),
+        ("52週高値", "fifty_two_high"),
+        ("52週安値", "fifty_two_low"),
+        ("配当利回り", "dividend_yield"),
+    ]:
+        rows.append({"項目": label, "取得元": source_map.get(key, "未取得")})
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
 def show_stock_page(row):
-    info = get_stock_info(row["yf_ticker"])
+    combined, source_map, yf_data, fmp_data, alpha_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY)
 
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
     col1, col2 = st.columns([1.1, 2])
@@ -285,31 +548,70 @@ def show_stock_page(row):
         st.write(row["business"])
         st.write("**AIとのつながり**")
         st.write(row["ai_relation"])
-        if info.get("sector") or info.get("industry"):
+        if combined.get("sector") or combined.get("industry"):
             st.write("**分類**")
-            st.write(f'{info.get("sector","")} / {info.get("industry","")}')
+            st.write(f'{combined.get("sector","")} / {combined.get("industry","")}')
     st.markdown("</div>", unsafe_allow_html=True)
 
     show_external_links(row)
 
-    st.subheader("📊 自動取得データ")
+    st.subheader("📊 自動取得データ：複数ソース補完")
+    if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY:
+        st.markdown(
+            """
+            <div class="notice">
+            現在は <b>yfinanceのみ</b> で取得しています。<br>
+            FMP_API_KEY または ALPHAVANTAGE_API_KEY を Streamlit Secrets に入れると、PER/PBR/時価総額の補完ができます。
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        active = []
+        if FMP_API_KEY:
+            active.append("FMP")
+        if ALPHAVANTAGE_API_KEY:
+            active.append("Alpha Vantage")
+        st.markdown(
+            f"""
+            <div class="safe">
+            補助APIが有効です：<b>{", ".join(active)}</b><br>
+            yfinanceで取れない項目をAPIで補完します。
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("株価", fmt_price(info["price"], info["currency"]), fmt_percent(info["change_pct"]))
-    c2.metric("時価総額", fmt_market_cap(info["market_cap"]))
-    c3.metric("PER", fmt_num(info["trailing_pe"]))
-    c4.metric("予想PER", fmt_num(info["forward_pe"]))
-    c5.metric("PBR", fmt_num(info["price_to_book"]))
+    c1.metric("株価", fmt_price(combined["price"], combined["currency"]), fmt_percent(combined["change_pct"]))
+    c2.metric("時価総額", fmt_market_cap(combined["market_cap"]))
+    c3.metric("PER", fmt_num(combined["per"]))
+    c4.metric("予想PER", fmt_num(combined["forward_pe"]))
+    c5.metric("PBR", fmt_num(combined["pbr"]))
 
     c6, c7, c8, c9 = st.columns(4)
-    c6.metric("前日終値", fmt_price(info["prev_close"], info["currency"]))
-    c7.metric("52週高値", fmt_price(info["fifty_two_high"], info["currency"]))
-    c8.metric("52週安値", fmt_price(info["fifty_two_low"], info["currency"]))
-    dy = info["dividend_yield"] * 100 if info["dividend_yield"] is not None else None
+    c6.metric("前日終値", fmt_price(combined["prev_close"], combined["currency"]))
+    c7.metric("52週高値", fmt_price(combined["fifty_two_high"], combined["currency"]))
+    c8.metric("52週安値", fmt_price(combined["fifty_two_low"], combined["currency"]))
+    dy = None
+    if combined["dividend_yield"] is not None:
+        try:
+            dy = float(combined["dividend_yield"]) * 100 if float(combined["dividend_yield"]) < 1 else float(combined["dividend_yield"])
+        except Exception:
+            dy = combined["dividend_yield"]
     c9.metric("配当利回り", fmt_percent(dy))
-    st.caption("※ 自動取得データはyfinance経由の参考値です。取得できない項目や遅延がある場合があります。")
+
+    c10, c11 = st.columns(2)
+    c10.metric("予想PBR", fmt_num(combined["forward_pbr"]))
+    c11.metric("データ取得コード", row["yf_ticker"])
+
+    with st.expander("📌 取得元を確認する"):
+        show_source_table(source_map)
+
+    st.caption("※ 自動取得データは参考値です。無料APIやyfinanceは欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
 
     st.subheader("📈 株価チャート")
-    hist = get_history(row["yf_ticker"], period_map[period_label])
+    hist = get_yf_history(row["yf_ticker"], period_map[period_label])
     if hist.empty:
         st.warning("チャートデータを取得できませんでした。")
     else:
@@ -328,16 +630,21 @@ def show_stock_page(row):
     if related_df.empty:
         st.info("関連銘柄はまだ登録されていません。")
     else:
-        st.dataframe(related_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
+        st.dataframe(
+            related_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]],
+            use_container_width=True,
+            hide_index=True,
+        )
 
-st.markdown('<div class="main-title">AI関連株コード辞典 v3</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">ティッカー入力で、会社情報・自動取得データ・チャート・関連図・外部調査リンクを表示します。</div>', unsafe_allow_html=True)
+# -----------------------------
+# UI
+# -----------------------------
+st.markdown('<div class="main-title">AI関連株コード辞典 v4</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">yfinance + FMP + Alpha Vantage で自動データを補完する試作版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
-mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "全銘柄一覧"])
+mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "全銘柄一覧", "API設定確認"])
 period_label = st.sidebar.selectbox("チャート期間", ["1ヶ月", "3ヶ月", "6ヶ月", "1年", "5年"], index=2)
-period_map = {"1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y", "5年": "5y"}
-
 st.sidebar.markdown("---")
 st.sidebar.caption("日本株例：7203.T / 9984.T / 6857.T")
 st.sidebar.caption("米国株例：NVDA / VRT / CEG")
@@ -377,9 +684,26 @@ elif mode == "カテゴリ表示":
     st.dataframe(result[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
     components.html(make_mindmap_html(), height=560, scrolling=True)
 
-else:
+elif mode == "全銘柄一覧":
     st.subheader("登録銘柄一覧")
     st.dataframe(df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]], use_container_width=True, hide_index=True)
+
+elif mode == "API設定確認":
+    st.subheader("API設定確認")
+    st.write("FMP_API_KEY:", "設定済み" if FMP_API_KEY else "未設定")
+    st.write("ALPHAVANTAGE_API_KEY:", "設定済み" if ALPHAVANTAGE_API_KEY else "未設定")
+    st.markdown("""
+    ### Streamlit Cloudで設定する場所
+    App管理画面 → Settings → Secrets
+
+    ### 入れる内容の例
+    ```toml
+    FMP_API_KEY = "ここにFMPのAPIキー"
+    ALPHAVANTAGE_API_KEY = "ここにAlpha VantageのAPIキー"
+    ```
+
+    片方だけでもOKです。
+    """)
 
 st.markdown("---")
 with st.expander("🛠 銘柄データの追加・修正方法"):
@@ -391,4 +715,6 @@ with st.expander("🛠 銘柄データの追加・修正方法"):
     - `yf_ticker`：yfinance取得用コード。日本株は例：`7203.T`
     - `official_ir_url`：公式IRページURL。空欄でもOK
     - `related`：関連銘柄。カンマ区切り
+
+    無料APIは制限があるので、取得できない項目は「未取得」になります。
     """)

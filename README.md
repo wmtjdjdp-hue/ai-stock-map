@@ -1,3 +1,11 @@
+# AI関連株コード辞典 v26 Mindmap Fix
+
+## v26で修正した内容
+- AI関連図ページで出ていたエラーを修正
+- 原因だったHTML/CSS文字列の `{ }` 問題を回避
+- AI関連図のHTML生成を安全な書き方に変更
+- v25のStreamlit安全UIは維持
+
 # AI関連株コード辞典 v25 Streamlit Safe UI
 
 ## v25で修正した内容

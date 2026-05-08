@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v25", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v26", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v25 Clean
+# AI関連株コード辞典 v26 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -1980,6 +1980,7 @@ st.markdown(
 # -----------------------------
 # AI関連図
 # -----------------------------
+
 def make_mindmap_html(selected_ticker=None):
     base_categories = [
         ("GPU", ["NVDA", "AMD"]),
@@ -2007,6 +2008,7 @@ def make_mindmap_html(selected_ticker=None):
 
     selected = selected_ticker.upper() if selected_ticker else ""
     blocks = []
+
     for cat, tickers in category_map.items():
         items = []
         for t in tickers:
@@ -2017,65 +2019,166 @@ def make_mindmap_html(selected_ticker=None):
             else:
                 name = fav_names.get(t, "")
                 display = t
+
             active = " active" if selected in [display.upper(), t.upper()] else ""
-            items.append(f'<div class="node stock{active}">{display}<br><small>{name}</small></div>')
-        blocks.append(f"<div class='branch'><div class='node category'>{cat}</div><div class='stocks'>{''.join(items)}</div></div>")
+            items.append(
+                '<div class="stock-node{}">'
+                '<div class="ticker">{}</div>'
+                '<div class="company">{}</div>'
+                '</div>'.format(active, display, name)
+            )
 
-    return f"""
-    <html><head><style>
-    body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;margin:0;padding:10px;overflow-x:hidden;}}
-    .map {{display:flex;flex-direction:column;gap:14px;align-items:center;overflow-x:hidden;padding:12px;border:1px solid #e5e7eb;border-radius:18px;background:white;box-sizing:border-box;width:100%;max-width:100%;}}
-    .center {{width:100%;display:flex;align-items:center;justify-content:center;padding:4px 0 8px 0;position:sticky;top:0;background:white;z-index:5;border-bottom:1px solid #f1f5f9;}}
-    .ai {{width:92px;height:92px;border-radius:24px;background:#111827;color:white;font-size:38px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.18);}}
-    .branches {{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:100%;box-sizing:border-box;}}
-    .branch {{border:1px solid #e5e7eb;border-radius:16px;padding:10px;background:#fff;min-width:0;box-sizing:border-box;}}
-    .node.category {{font-weight:900;font-size:18px;border-bottom:3px solid #ff7ab6;display:inline-block;margin-bottom:8px;}}
-    .stocks {{display:flex;flex-wrap:wrap;gap:8px;}}
-    .node.stock {{border:1px solid #d1d5db;border-radius:12px;padding:8px 10px;width:calc(50% - 4px);box-sizing:border-box;background:#f9fafb;font-weight:900;line-height:1.15;overflow:hidden;text-overflow:ellipsis;}}
-    .node.stock small {{display:block;font-weight:500;color:#555;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
-    .node.stock.active {{background:#fff7d6;border:3px solid #f59e0b;transform:scale(1.01);}}
-    @media (max-width:760px) {{.branches {{grid-template-columns:1fr;}} .node.stock {{width:100%;}} .ai {{width:82px;height:82px;font-size:34px;}}}}
+        block = (
+            '<div class="category-card">'
+            '<div class="category-title">{}</div>'
+            '<div class="stock-list">{}</div>'
+            '</div>'
+        ).format(cat, "".join(items))
+        blocks.append(block)
 
-    .small-label {color:#cbd5e1;font-size:13px;font-weight:800;margin-top:6px;margin-bottom:2px;}
-    .hero-company-main {font-size:34px;font-weight:900;line-height:1.05;color:white;margin-bottom:14px;word-break:break-word;}
-    .hero-ticker-code {font-size:42px;font-weight:900;line-height:1.0;color:white;margin-bottom:12px;}
-
-    .identity-box {
-        background: rgba(255,255,255,0.10);
-        border: 1px solid rgba(255,255,255,0.22);
+    # CSSの { } は .format で壊れないように、HTML全体は通常文字列で組み立てる
+    html = """
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f8fafc;
+        margin: 0;
+        padding: 12px;
+        overflow-x: hidden;
+        color: #0f172a;
+    }
+    .map-wrap {
+        width: 100%;
+        box-sizing: border-box;
+        background: #ffffff;
+        border: 1px solid #dbe4ef;
         border-radius: 18px;
-        padding: 16px 18px;
-        margin-bottom: 14px;
+        padding: 18px;
+        box-shadow: 0 5px 16px rgba(15,23,42,.05);
     }
-    .identity-label {
-        color: #ffffff !important;
-        font-size: 15px;
-        font-weight: 900;
-        letter-spacing: .03em;
-        opacity: 0.96;
-        margin-bottom: 6px;
-    }
-    .identity-company {
-        color: #ffffff !important;
-        font-size: 38px;
-        font-weight: 950;
-        line-height: 1.08;
+    .ai-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
         margin-bottom: 18px;
-        text-shadow: 0 2px 10px rgba(0,0,0,.28);
-        word-break: break-word;
+        padding-bottom: 14px;
+        border-bottom: 1px solid #e5e7eb;
     }
-    .identity-ticker {
-        color: #ffffff !important;
-        font-size: 46px;
+    .ai-logo {
+        width: 64px;
+        height: 64px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, #08224f, #1d4ed8);
+        color: white;
+        font-size: 30px;
         font-weight: 950;
-        line-height: 1.0;
-        margin-bottom: 6px;
-        text-shadow: 0 2px 10px rgba(0,0,0,.28);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 22px rgba(15,23,42,.18);
     }
-    </style></head><body>
-    <div class="map"><div class="center"><div class="ai">AI</div></div><div class="branches">{''.join(blocks)}</div></div>
-    </body></html>
+    .ai-title {
+        font-size: 26px;
+        font-weight: 950;
+        color: #0f172a;
+        line-height: 1.15;
+    }
+    .ai-sub {
+        font-size: 13px;
+        font-weight: 700;
+        color: #64748b;
+        margin-top: 4px;
+    }
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .category-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 12px;
+        box-shadow: 0 3px 10px rgba(15,23,42,.035);
+        min-width: 0;
+    }
+    .category-title {
+        font-size: 17px;
+        font-weight: 950;
+        color: #0f172a;
+        margin-bottom: 10px;
+        padding-bottom: 7px;
+        border-bottom: 3px solid #60a5fa;
+        display: inline-block;
+    }
+    .stock-list {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+    }
+    .stock-node {
+        border: 1px solid #dbe4ef;
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 9px 10px;
+        min-width: 0;
+    }
+    .stock-node.active {
+        border: 2px solid #f59e0b;
+        background: #fff7ed;
+    }
+    .ticker {
+        font-size: 15px;
+        font-weight: 950;
+        color: #0f172a;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .company {
+        font-size: 11px;
+        font-weight: 700;
+        color: #64748b;
+        margin-top: 3px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    @media (max-width: 900px) {
+        .grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 620px) {
+        .grid {
+            grid-template-columns: 1fr;
+        }
+        .stock-list {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+    </head>
+    <body>
+        <div class="map-wrap">
+            <div class="ai-head">
+                <div class="ai-logo">AI</div>
+                <div>
+                    <div class="ai-title">AI関連図</div>
+                    <div class="ai-sub">AIに必要な部品・素材・電力・通信・データセンターを分類表示</div>
+                </div>
+            </div>
+            <div class="grid">
+                __BLOCKS__
+            </div>
+        </div>
+    </body>
+    </html>
     """
+    return html.replace("__BLOCKS__", "".join(blocks))
 
 period_map = {"1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y", "5年": "5y"}
 
@@ -2316,7 +2419,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v25</div>
+            <div class="hero-title-main">AI関連株コード辞典 v26</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>

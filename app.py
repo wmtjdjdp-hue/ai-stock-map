@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v22", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v23", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v22 Clean
+# AI関連株コード辞典 v23 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -1254,6 +1254,234 @@ st.markdown(
             grid-template-columns: 120px minmax(0,1fr) !important;
         }
     }
+
+    /* AI_STOCK_V23_FINAL_ORDER_CSS */
+    .block-container {
+        padding-top: 1.0rem !important;
+        padding-left: 1.35rem !important;
+        padding-right: 1.35rem !important;
+        max-width: 1080px !important;
+    }
+
+    .app-hero {
+        padding: 14px 20px !important;
+        margin: 0 0 12px 0 !important;
+        border-radius: 14px !important;
+        min-height: 76px !important;
+    }
+    .hero-icon {
+        width: 52px !important;
+        height: 52px !important;
+        border-radius: 13px !important;
+        font-size: 27px !important;
+        flex-shrink: 0 !important;
+    }
+    .hero-title-main {
+        font-size: clamp(25px, 2.6vw, 36px) !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+    }
+    .hero-sub-main {
+        font-size: 12.5px !important;
+        margin-top: 5px !important;
+    }
+
+    .site-card {
+        border-radius: 14px !important;
+        box-shadow: 0 5px 16px rgba(15,23,42,.065) !important;
+    }
+
+    .dashboard-top-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.28fr) minmax(250px, .82fr);
+        gap: 14px;
+        margin-bottom: 12px;
+        align-items: stretch;
+    }
+
+    .identity-site-card {
+        padding: 16px 20px !important;
+        min-height: 148px !important;
+    }
+    .identity-site-row {
+        grid-template-columns: 150px minmax(0, 1fr) 112px 92px !important;
+        gap: 12px !important;
+        padding: 12px 0 !important;
+        align-items: center !important;
+    }
+    .identity-site-row.company-row {
+        grid-template-columns: 150px minmax(0, 1fr) !important;
+    }
+    .identity-site-label {
+        font-size: 17px !important;
+        color: #0f172a !important;
+    }
+    .identity-site-value {
+        font-size: clamp(25px, 2.8vw, 34px) !important;
+        text-align: left !important;
+    }
+    .identity-site-ticker {
+        font-size: clamp(27px, 3vw, 38px) !important;
+        text-align: left !important;
+    }
+    .identity-category-label {
+        color: #0f172a;
+        font-size: 17px;
+        font-weight: 950;
+        white-space: nowrap;
+        text-align: right;
+    }
+    .identity-category-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f0e6ff;
+        color: #6d28d9;
+        font-size: 14px;
+        font-weight: 900;
+        border-radius: 10px;
+        padding: 7px 11px;
+        white-space: nowrap;
+    }
+
+    .search-real-card {
+        padding: 15px 18px 12px 18px !important;
+        min-height: 94px !important;
+    }
+    .search-real-title {
+        font-size: 17px !important;
+        margin-bottom: 8px !important;
+    }
+    .search-input-fav-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 142px;
+        gap: 10px;
+        align-items: end;
+    }
+    .search-input-fav-row [data-testid="stTextInput"] label {
+        display: none !important;
+    }
+    .search-input-fav-row [data-testid="stTextInput"] input {
+        min-height: 40px !important;
+        border-radius: 10px !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
+    }
+    .favorite-mini-card {
+        height: 40px;
+        border: 1px solid #d9e1ec;
+        border-radius: 10px;
+        background: #ffffff;
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 900;
+        box-shadow: 0 3px 10px rgba(15,23,42,.055);
+        white-space: nowrap;
+    }
+    .search-main-button {
+        margin-top: 10px;
+        height: 42px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #0f172a, #182843);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 16px;
+        font-weight: 950;
+        box-shadow: 0 6px 15px rgba(15,23,42,.16);
+    }
+
+    .info-site-card {
+        padding: 0 !important;
+        margin-bottom: 12px !important;
+        border-radius: 14px !important;
+        overflow: hidden !important;
+    }
+    .compact-info-card {
+        background: #ffffff;
+        border: 1px solid #dfe7f1;
+        border-radius: 14px;
+        box-shadow: 0 5px 16px rgba(15,23,42,.055);
+        padding: 14px 18px;
+        margin-bottom: 12px;
+    }
+    .compact-section-title {
+        color: #0f172a;
+        font-size: 18px;
+        font-weight: 950;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .compact-section-body {
+        color: #334155;
+        font-size: 14px;
+        line-height: 1.55;
+        font-weight: 650;
+        padding-left: 30px;
+    }
+
+    .auto-data-card, .chart-card {
+        background: #ffffff;
+        border: 1px solid #dfe7f1;
+        border-radius: 14px;
+        box-shadow: 0 5px 16px rgba(15,23,42,.055);
+        padding: 14px 18px;
+        margin-bottom: 12px;
+    }
+    .section-header-v23 {
+        color: #0f172a;
+        font-size: 18px;
+        font-weight: 950;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .metric-card {
+        min-height: 70px !important;
+        padding: 8px 10px !important;
+        border-radius: 11px !important;
+        margin-bottom: 8px !important;
+    }
+    .metric-label2 {
+        font-size: 11.5px !important;
+        margin-bottom: 4px !important;
+    }
+    .metric-value2 {
+        font-size: clamp(17px, 2vw, 23px) !important;
+    }
+    .metric-sub {
+        font-size: 10.5px !important;
+        margin-top: 3px !important;
+    }
+    .stPlotlyChart {
+        margin-top: -6px !important;
+    }
+
+    @media (max-width: 900px) {
+        .dashboard-top-grid {
+            grid-template-columns: 1fr !important;
+        }
+        .identity-site-row,
+        .identity-site-row.company-row {
+            grid-template-columns: 120px minmax(0,1fr) !important;
+        }
+        .identity-category-label, .identity-category-pill {
+            display: none !important;
+        }
+        .search-input-fav-row {
+            grid-template-columns: 1fr !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1440,13 +1668,15 @@ def show_stock_page(row):
         st.markdown(
             f"""
             <div class="site-card identity-site-card">
-                <div class="identity-site-row">
+                <div class="identity-site-row company-row">
                     <div class="identity-site-label">会社名</div>
                     <div class="identity-site-value">{display_company_name}</div>
                 </div>
                 <div class="identity-site-row">
                     <div class="identity-site-label">ティッカーコード</div>
                     <div class="identity-site-ticker">{row["ticker"]}</div>
+                    <div class="identity-category-label">分類</div>
+                    <div class="identity-category-pill">{display_category or "未取得"}</div>
                 </div>
             </div>
             """,
@@ -1454,35 +1684,30 @@ def show_stock_page(row):
         )
 
     with top_right:
-        st.markdown('<div class="search-real-card"><div class="search-real-title">ティッカーコード検索</div>', unsafe_allow_html=True)
-        st.text_input(
-            "ティッカーコード検索",
-            key="ticker_search_input",
-            on_change=sync_ticker_input,
-            placeholder="ティッカーコードを入力",
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown('<div style="height:12px;"></div>', unsafe_allow_html=True)
-        st.markdown('<div class="favorite-site-card">☆　お気に入り登録</div>', unsafe_allow_html=True)
+        st.markdown('<div class="search-real-card"><div class="search-real-title">🔎 ティッカーコード検索</div><div class="search-input-fav-row">', unsafe_allow_html=True)
+
+        input_col, fav_col = st.columns([1.0, 0.52], gap="small")
+        with input_col:
+            st.text_input(
+                "ティッカーコード検索",
+                key="ticker_search_input",
+                on_change=sync_ticker_input,
+                placeholder="例：AAPL",
+            )
+        with fav_col:
+            st.markdown('<div class="favorite-mini-card">☆ お気に入り登録</div>', unsafe_allow_html=True)
+
+        st.markdown('</div><div class="search-main-button">🔍　検索</div></div>', unsafe_allow_html=True)
 
     st.markdown(
         f"""
-        <div class="site-card info-site-card">
-            <div class="info-section">
-                <div class="info-title">🏢 何を作るか / 事業内容</div>
-                <div class="info-body">{display_business}</div>
-            </div>
-            <div class="info-section">
-                <div class="info-title">🔗 AIとのつながり</div>
-                <div class="info-body">{display_relation}</div>
-            </div>
-            <div class="info-section">
-                <div class="info-title">🏷️ 分類</div>
-                <div class="info-class-grid">
-                    <div><b>セクター：</b>{display_category or "未取得"}</div>
-                    <div><b>業種：</b>{display_industry or "未取得"}</div>
-                </div>
-            </div>
+        <div class="compact-info-card">
+            <div class="compact-section-title">🏢 何を作るか / 事業内容</div>
+            <div class="compact-section-body">{display_business}</div>
+        </div>
+        <div class="compact-info-card">
+            <div class="compact-section-title">🔗 AIとのつながり</div>
+            <div class="compact-section-body">{display_relation}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1503,7 +1728,7 @@ def show_stock_page(row):
     show_external_links(row)
     show_register_box(row)
 
-    st.subheader("📊 自動取得データ")
+    st.markdown('<div class="auto-data-card"><div class="section-header-v23">▦ 自動取得データ</div>', unsafe_allow_html=True)
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
         st.markdown(
             """
@@ -1546,7 +1771,9 @@ def show_stock_page(row):
 
     st.caption("※ 自動取得データは参考値です。無料API/yfinanceは欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
 
-    st.subheader("📈 株価チャート")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="chart-card"><div class="section-header-v23">📈 株価チャート</div>', unsafe_allow_html=True)
     hist = get_yf_history(row["yf_ticker"], period_map[period_label])
     if hist.empty:
         st.warning("チャートデータを取得できませんでした。")
@@ -1556,6 +1783,7 @@ def show_stock_page(row):
         fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
         fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
         st.plotly_chart(fig, use_container_width=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # -----------------------------
 # UI
@@ -1565,7 +1793,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v22</div>
+            <div class="hero-title-main">AI関連株コード辞典 v23</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>

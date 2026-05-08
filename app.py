@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v34", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v35", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v34 Clean
+# AI関連株コード辞典 v35 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -107,6 +107,37 @@ def get_all_registered_df():
     combined["yf_ticker"] = combined["yf_ticker"].astype(str).str.upper()
     combined = combined.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
     return combined
+
+
+def get_persistent_favorites_df():
+    """Google Sheetsとセッション一時登録から、AI関連図へ戻す銘柄だけを取得する。"""
+    parts = []
+    try:
+        google_df = load_google_sheet_stocks()
+        if not google_df.empty:
+            parts.append(google_df[REGISTER_COLS])
+    except Exception:
+        pass
+
+    try:
+        extra = get_registered_extra_df()
+        if not extra.empty:
+            parts.append(extra[REGISTER_COLS])
+    except Exception:
+        pass
+
+    if not parts:
+        return pd.DataFrame(columns=REGISTER_COLS)
+
+    out = pd.concat(parts, ignore_index=True)
+    for col in REGISTER_COLS:
+        if col not in out.columns:
+            out[col] = ""
+    out = out[REGISTER_COLS]
+    out["ticker"] = out["ticker"].astype(str).str.upper()
+    out["yf_ticker"] = out["yf_ticker"].astype(str).str.upper()
+    out = out.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
+    return out
 
 def add_registered_extra_stock(row, category=None):
     ticker = str(row.get("ticker", "")).upper().strip()
@@ -2378,6 +2409,25 @@ def make_mindmap_html(selected_ticker=None):
 
     category_map = {cat: list(tickers) for cat, tickers in base_categories}
     fav_names = {}
+
+    # 画面更新/F5後も、Googleスプレッドシートに保存済みの銘柄をAI関連図へ復元する
+    try:
+        persistent_df = get_persistent_favorites_df()
+        for _, prow in persistent_df.iterrows():
+            cat = str(prow.get("category", "未分類") or "未分類")
+            ticker = str(prow.get("ticker", "")).upper().strip()
+            company = str(prow.get("company", "")).strip()
+            if not ticker:
+                continue
+            fav_names[ticker] = company
+            if cat not in category_map:
+                category_map[cat] = []
+            if ticker not in category_map[cat]:
+                category_map[cat].append(ticker)
+    except Exception:
+        pass
+
+    # セッション内のお気に入りも追加
     for item in st.session_state.favorite_stocks:
         cat = item.get("category", "未分類") or "未分類"
         ticker = item.get("ticker", "").upper()
@@ -2791,7 +2841,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v34</div>
+            <div class="hero-title-main">AI関連株コード辞典 v35</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2804,7 +2854,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v34</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v35</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

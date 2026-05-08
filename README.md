@@ -1,3 +1,10 @@
+# AI関連株コード辞典 v35 Restore Favorites From Google Sheet
+
+## v35で修正した内容
+- F5更新やアプリ再起動後も、Googleスプレッドシートに保存済みの銘柄をAI関連図へ復元
+- セッション内お気に入りだけでなく、Google Sheetsのstocks行もAI関連図に反映
+- v34のGoogle接続キャッシュ解除と保存安定化はそのまま維持
+
 # AI関連株コード辞典 v34 No Google Cache
 
 ## v34で修正した内容

@@ -1,3 +1,12 @@
+# AI関連株コード辞典 v32 Google Sheets Safe Error
+
+## v32で修正した内容
+- Googleスプレッドシート接続エラーでアプリ全体が落ちないように修正
+- private_keyの改行を自動補正
+- Googleシート読み込みを get_all_records ではなく get_all_values ベースに変更
+- ヘッダー不一致でも落ちず、A1:J1を自動補正
+- API設定確認に接続エラー表示を追加
+
 # AI関連株コード辞典 v31 Google Sheets Persistence
 
 ## v31で追加した内容

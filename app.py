@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v26", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v27", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v26 Clean
+# AI関連株コード辞典 v27 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -1118,7 +1118,7 @@ st.markdown(
     }
     .app-hero {
         padding: 16px 22px !important;
-        margin: 0 0 14px 0 !important;
+        margin: 10px 0 16px 0 !important;
         border-radius: 15px !important;
         min-height: 82px !important;
     }
@@ -1562,14 +1562,14 @@ st.markdown(
         background: linear-gradient(135deg, #ffffff 0%, #f9fbff 65%, #eef6ff 100%);
         border: 1px solid #dce6f2;
         border-radius: 18px;
-        padding: 18px 22px !important;
-        margin: 0 0 14px 0 !important;
+        padding: 16px 22px !important;
+        margin: 10px 0 16px 0 !important;
         box-shadow: 0 8px 24px rgba(15,23,42,.06);
         display: flex;
         align-items: center;
         gap: 18px;
         overflow: visible !important;
-        min-height: 84px;
+        min-height: 76px;
     }
     .app-hero::after {
         content: "";
@@ -1834,7 +1834,7 @@ st.markdown(
     /* AI_STOCK_V25_STREAMLIT_SAFE_UI_CSS */
     .block-container {
         max-width: 1220px !important;
-        padding-top: 0.75rem !important;
+        padding-top: 1.85rem !important;
         padding-left: 1.35rem !important;
         padding-right: 1.35rem !important;
     }
@@ -2286,8 +2286,6 @@ def show_stock_page(row):
         with st.container():
             st.markdown('<div class="v25-search-box">', unsafe_allow_html=True)
             st.markdown('<div class="v25-card-title">🔎 ティッカーコード検索</div>', unsafe_allow_html=True)
-            st.markdown('<div class="v25-search-note">ティッカーコードを入力</div>', unsafe_allow_html=True)
-
             input_col, fav_col = st.columns([1.25, 0.8], gap="small")
             with input_col:
                 st.text_input(
@@ -2414,12 +2412,13 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
+st.markdown('<div style="height:10px;"></div>', unsafe_allow_html=True)
 st.markdown(
     '''
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v26</div>
+            <div class="hero-title-main">AI関連株コード辞典 v27</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2432,7 +2431,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v24</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v27</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v29", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v30", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v29 Clean
+# AI関連株コード辞典 v30 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -57,6 +57,102 @@ def sync_ticker_input():
     value = st.session_state.get("ticker_search_input", "").strip().upper()
     if value:
         st.session_state.last_ticker = value
+
+
+# -----------------------------
+# お気に入り登録 → 登録銘柄一覧へ追加表示する一時DB
+# 注意：Streamlitのセッション内保存。アプリ再起動で消える可能性あり。
+# -----------------------------
+REGISTER_COLS = [
+    "ticker", "yf_ticker", "company", "category", "business",
+    "ai_relation", "ai_score", "keywords", "related", "official_ir_url"
+]
+
+if "registered_extra_stocks" not in st.session_state:
+    st.session_state.registered_extra_stocks = []
+
+def get_registered_extra_df():
+    if not st.session_state.registered_extra_stocks:
+        return pd.DataFrame(columns=REGISTER_COLS)
+    out = pd.DataFrame(st.session_state.registered_extra_stocks)
+    for col in REGISTER_COLS:
+        if col not in out.columns:
+            out[col] = ""
+    return out[REGISTER_COLS]
+
+def get_all_registered_df():
+    base = df.copy()
+    extra = get_registered_extra_df()
+    if extra.empty:
+        return base
+    combined = pd.concat([base[REGISTER_COLS], extra[REGISTER_COLS]], ignore_index=True)
+    combined["ticker"] = combined["ticker"].astype(str).str.upper()
+    combined = combined.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
+    return combined
+
+def add_registered_extra_stock(row, category=None):
+    ticker = str(row.get("ticker", "")).upper().strip()
+    if not ticker:
+        return False
+
+    final_category = str(category or row.get("category", "未分類") or "未分類").strip()
+    score_value = row.get("ai_score", 3)
+    try:
+        score_value = int(score_value)
+    except Exception:
+        score_value = 3
+
+    item = {
+        "ticker": ticker,
+        "yf_ticker": str(row.get("yf_ticker", ticker)).upper().strip(),
+        "company": str(row.get("company", ticker)).strip(),
+        "category": final_category,
+        "business": str(row.get("business", "")).strip(),
+        "ai_relation": str(row.get("ai_relation", "")).strip(),
+        "ai_score": score_value,
+        "keywords": str(row.get("keywords", "")).strip(),
+        "related": str(row.get("related", "")).strip(),
+        "official_ir_url": str(row.get("official_ir_url", "")).strip(),
+    }
+
+    replaced = False
+    for i, old in enumerate(st.session_state.registered_extra_stocks):
+        if str(old.get("ticker", "")).upper() == ticker:
+            st.session_state.registered_extra_stocks[i] = item
+            replaced = True
+            break
+    if not replaced:
+        st.session_state.registered_extra_stocks.append(item)
+
+    return True
+
+def remove_registered_extra_stock(ticker):
+    ticker = str(ticker).upper().strip()
+    st.session_state.registered_extra_stocks = [
+        x for x in st.session_state.registered_extra_stocks
+        if str(x.get("ticker", "")).upper() != ticker
+    ]
+
+def build_csv_line_from_row(row, category=None):
+    final_category = str(category or row.get("category", "未分類") or "未分類")
+    values = [
+        row.get("ticker", ""),
+        row.get("yf_ticker", row.get("ticker", "")),
+        row.get("company", ""),
+        final_category,
+        row.get("business", ""),
+        row.get("ai_relation", ""),
+        row.get("ai_score", 3),
+        row.get("keywords", ""),
+        row.get("related", ""),
+        row.get("official_ir_url", ""),
+    ]
+    def clean(v):
+        s = str(v).replace("\n", " ").replace("\r", " ").strip()
+        if "," in s or '"' in s:
+            s = '"' + s.replace('"', '""') + '"'
+        return s
+    return ",".join(clean(v) for v in values)
 
 # -----------------------------
 # 表示ユーティリティ
@@ -662,7 +758,8 @@ def clean_company_name(name):
 
 def build_row_from_ticker(ticker):
     t = str(ticker).strip().upper()
-    hit = df[(df["ticker"].str.upper() == t) | (df["yf_ticker"].str.upper() == t)]
+    all_df = get_all_registered_df()
+    hit = all_df[(all_df["ticker"].str.upper() == t) | (all_df["yf_ticker"].str.upper() == t)]
     if not hit.empty:
         row = hit.iloc[0].copy()
         row["_virtual"] = False
@@ -2061,7 +2158,8 @@ def make_mindmap_html(selected_ticker=None):
     for cat, tickers in category_map.items():
         items = []
         for t in tickers:
-            hit = df[(df["ticker"] == t) | (df["yf_ticker"] == t)]
+            all_map_df = get_all_registered_df()
+            hit = all_map_df[(all_map_df["ticker"] == t) | (all_map_df["yf_ticker"] == t)]
             if not hit.empty:
                 name = hit.iloc[0]["company"]
                 display = hit.iloc[0]["ticker"]
@@ -2271,7 +2369,8 @@ def show_register_box(row):
 
     if st.button("この銘柄をAI関連図に登録", key=f"reg_btn_{row['ticker']}", use_container_width=True):
         add_favorite_stock(row["ticker"], row["company"], final_cat)
-        st.success(f'{row["ticker"]} を「{final_cat}」に登録しました。左メニューの「AI関連図」で確認できます。')
+        add_registered_extra_stock(row, final_cat)
+        st.success(f'{row["ticker"]} を「{final_cat}」に登録しました。AI関連図と登録銘柄一覧で確認できます。')
 
     if bool(row.get("_virtual", False)):
         st.markdown("### 📋 stocks.csvに追加する行")
@@ -2346,7 +2445,8 @@ def show_stock_page(row):
 
     if fav_clicked:
         add_favorite_stock(row["ticker"], display_company_name, display_category)
-        st.success(f'{row["ticker"]} を「{display_category}」にお気に入り登録しました。')
+        add_registered_extra_stock(row, display_category)
+        st.success(f'{row["ticker"]} を「{display_category}」にお気に入り登録し、登録銘柄一覧にも追加しました。')
 
     if search_clicked:
         sync_ticker_input()
@@ -2448,7 +2548,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v29</div>
+            <div class="hero-title-main">AI関連株コード辞典 v30</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2461,7 +2561,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v29</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v30</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -2498,16 +2598,17 @@ if mode == "ティッカー検索":
 elif mode == "キーワード検索":
     keyword = st.text_input("キーワードを入力", value="冷却").strip()
     if keyword:
+        all_df = get_all_registered_df()
         mask = (
-            df["ticker"].str.contains(keyword, case=False, na=False)
-            | df["yf_ticker"].str.contains(keyword, case=False, na=False)
-            | df["company"].str.contains(keyword, case=False, na=False)
-            | df["category"].str.contains(keyword, case=False, na=False)
-            | df["business"].str.contains(keyword, case=False, na=False)
-            | df["ai_relation"].str.contains(keyword, case=False, na=False)
-            | df["keywords"].str.contains(keyword, case=False, na=False)
+            all_df["ticker"].astype(str).str.contains(keyword, case=False, na=False)
+            | all_df["yf_ticker"].astype(str).str.contains(keyword, case=False, na=False)
+            | all_df["company"].astype(str).str.contains(keyword, case=False, na=False)
+            | all_df["category"].astype(str).str.contains(keyword, case=False, na=False)
+            | all_df["business"].astype(str).str.contains(keyword, case=False, na=False)
+            | all_df["ai_relation"].astype(str).str.contains(keyword, case=False, na=False)
+            | all_df["keywords"].astype(str).str.contains(keyword, case=False, na=False)
         )
-        result = df[mask]
+        result = all_df[mask]
         st.subheader(f"検索結果：{keyword}")
         if result.empty:
             st.warning("該当する登録済み銘柄がありません。")
@@ -2515,8 +2616,9 @@ elif mode == "キーワード検索":
             st.dataframe(result[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
 
 elif mode == "カテゴリ表示":
-    category = st.selectbox("カテゴリを選択", sorted(df["category"].dropna().unique().tolist()))
-    result = df[df["category"] == category]
+    all_df = get_all_registered_df()
+    category = st.selectbox("カテゴリを選択", sorted(all_df["category"].dropna().unique().tolist()))
+    result = all_df[all_df["category"] == category]
     st.subheader(f"カテゴリ：{category}")
     st.dataframe(result[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
 
@@ -2536,7 +2638,25 @@ elif mode == "AI関連図":
 
 elif mode == "全銘柄一覧":
     st.subheader("登録銘柄一覧")
-    st.dataframe(df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]], use_container_width=True, hide_index=True)
+    all_df = get_all_registered_df()
+    st.dataframe(all_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]], use_container_width=True, hide_index=True)
+
+    extra_df = get_registered_extra_df()
+    if not extra_df.empty:
+        st.markdown("### ⭐ 今回お気に入り登録で追加した銘柄")
+        st.dataframe(extra_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
+
+        target = st.selectbox("一時登録を解除する銘柄", extra_df["ticker"].tolist())
+        if st.button("選択した一時登録を解除", use_container_width=True):
+            remove_registered_extra_stock(target)
+            remove_favorite_stock(target)
+            st.success(f"{target} を一時登録から解除しました。")
+            st.rerun()
+
+        st.markdown("### 📋 stocks.csvへ追記するCSV")
+        csv_lines = "\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
+        st.code(csv_lines, language="csv")
+        st.caption("このCSVを stocks.csv に追記すると、再起動後も残せます。次はGoogleスプレッドシート保存型にできます。")
 
 elif mode == "API設定確認":
     st.subheader("API設定確認")

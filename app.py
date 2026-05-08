@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v9.2", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v13", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v9.2
+# AI関連株コード辞典 v13
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -54,17 +54,6 @@ def init_favorites():
         st.session_state.favorite_stocks = []
 
 init_favorites()
-
-if "last_ticker" not in st.session_state:
-    st.session_state.last_ticker = "NVDA"
-
-if "ticker_search_input" not in st.session_state:
-    st.session_state.ticker_search_input = st.session_state.last_ticker
-
-def sync_ticker_input():
-    value = st.session_state.get("ticker_search_input", "").strip().upper()
-    if value:
-        st.session_state.last_ticker = value
 
 def add_favorite_stock(ticker, company, category):
     ticker = str(ticker).upper().strip()
@@ -272,46 +261,17 @@ def get_yfinance_data(yf_ticker):
     try:
         t = yf.Ticker(yf_ticker)
 
-        # 1) fast_info：株価・前日終値・時価総額が取れやすい
+        # fast_info
         try:
             fast = t.fast_info
-            def fget(obj, key):
-                try:
-                    return getattr(obj, key)
-                except Exception:
-                    try:
-                        return obj.get(key)
-                    except Exception:
-                        return None
-
-            result["price"] = pick_first(
-                fget(fast, "last_price"),
-                fget(fast, "lastPrice"),
-            )
-            result["prev_close"] = pick_first(
-                fget(fast, "previous_close"),
-                fget(fast, "previousClose"),
-            )
-            result["market_cap"] = pick_first(
-                fget(fast, "market_cap"),
-                fget(fast, "marketCap"),
-            )
-            result["currency"] = pick_first(
-                fget(fast, "currency"),
-                ""
-            )
-            result["fifty_two_high"] = pick_first(
-                fget(fast, "year_high"),
-                fget(fast, "yearHigh"),
-            )
-            result["fifty_two_low"] = pick_first(
-                fget(fast, "year_low"),
-                fget(fast, "yearLow"),
-            )
+            result["price"] = getattr(fast, "last_price", None) or fast.get("last_price")
+            result["prev_close"] = getattr(fast, "previous_close", None) or fast.get("previous_close")
+            result["market_cap"] = getattr(fast, "market_cap", None) or fast.get("market_cap")
+            result["currency"] = getattr(fast, "currency", "") or fast.get("currency", "")
         except Exception:
             pass
 
-        # 2) info：PER/PBR/分類が取れることがある
+        # info
         try:
             info = t.info or {}
             result["price"] = pick_first(result["price"], info.get("currentPrice"), info.get("regularMarketPrice"))
@@ -320,8 +280,8 @@ def get_yfinance_data(yf_ticker):
             result["per"] = pick_first(info.get("trailingPE"))
             result["forward_pe"] = pick_first(info.get("forwardPE"))
             result["pbr"] = pick_first(info.get("priceToBook"))
-            result["fifty_two_high"] = pick_first(result["fifty_two_high"], info.get("fiftyTwoWeekHigh"))
-            result["fifty_two_low"] = pick_first(result["fifty_two_low"], info.get("fiftyTwoWeekLow"))
+            result["fifty_two_high"] = pick_first(info.get("fiftyTwoWeekHigh"))
+            result["fifty_two_low"] = pick_first(info.get("fiftyTwoWeekLow"))
             result["dividend_yield"] = pick_first(info.get("dividendYield"))
             result["currency"] = pick_first(result["currency"], info.get("currency"), "")
             result["sector"] = pick_first(info.get("sector"), "")
@@ -329,8 +289,8 @@ def get_yfinance_data(yf_ticker):
         except Exception:
             pass
 
-        # 3) history：株価と前日終値の最終バックアップ
-        try:
+        # history backup
+        if result["price"] is None or result["prev_close"] is None:
             hist = t.history(period="5d")
             if hist is not None and not hist.empty:
                 closes = hist["Close"].dropna().tolist()
@@ -338,8 +298,6 @@ def get_yfinance_data(yf_ticker):
                     result["price"] = pick_first(result["price"], closes[-1])
                 if len(closes) >= 2:
                     result["prev_close"] = pick_first(result["prev_close"], closes[-2])
-        except Exception:
-            pass
 
         if result["price"] is not None and result["prev_close"] not in [None, 0]:
             result["change_pct"] = (float(result["price"]) - float(result["prev_close"])) / float(result["prev_close"]) * 100
@@ -913,19 +871,101 @@ def make_virtual_row(ticker):
         "_virtual": True,
     })
 
-def show_add_to_db_hint(row):
+def auto_ai_relation_from_category(category, industry):
+    text = f"{category} {industry}".lower()
+
+    if any(k in text for k in ["semiconductor", "chip", "electronic", "technology"]):
+        return "半導体・電子部品・AIインフラの観点で関連候補。詳細は後で自分メモに追記。"
+    if any(k in text for k in ["telecom", "communication", "network", "wireless"]):
+        return "通信インフラ・クラウド接続・データセンター通信の観点でAI関連候補。"
+    if any(k in text for k in ["utility", "electric", "energy", "power"]):
+        return "AIデータセンターの電力需要・送電・発電インフラの観点で関連候補。"
+    if any(k in text for k in ["real estate", "reit", "data center"]):
+        return "データセンター・施設インフラの観点でAI関連候補。"
+    if any(k in text for k in ["software", "cloud", "internet", "services"]):
+        return "ソフトウェア・クラウド・AIサービス利用拡大の観点で関連候補。"
+    if any(k in text for k in ["industrial", "machinery", "engineering", "construction"]):
+        return "設備投資・インフラ・製造装置の観点でAI関連候補。"
+    if any(k in text for k in ["materials", "mining", "copper", "chemical"]):
+        return "素材・資源・電線・設備材料の観点でAIインフラ関連候補。"
+
+    return "取得分類からAI関連候補として仮登録。詳しい関連理由は後で自分メモに追記。"
+
+def show_add_to_db_hint(row, display_category=None, display_industry=None, display_business=None):
     if bool(row.get("_virtual", False)):
+        auto_category = display_category or row.get("category", "未分類") or "未分類"
+        auto_industry = display_industry or ""
+        auto_business = display_business or row.get("business", "")
+        auto_relation = auto_ai_relation_from_category(auto_category, auto_industry)
+        auto_keywords = f"{auto_category} {auto_industry} {row.get('company','')}"
+
         st.markdown(
             """
             <div class="notice">
             <b>この銘柄はまだAI関連株DBには未登録です。</b><br>
-            株価・チャート・外部リンクは表示できます。<br>
-            AIカテゴリ、関連図、関連銘柄に入れたい場合は、下の「stocks.csvに追加する行」をコピーして追加してください。
+            外部データから取得できた情報を下に自動反映しました。<br>
+            必要ならカテゴリを変えて、AI関連図へ一時登録できます。
             </div>
             """,
             unsafe_allow_html=True,
         )
-        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},未分類,事業内容を入力,AIとの関係を入力,3,キーワードを入力,"",'
+
+        st.markdown("### 🧩 自動取得から作った仮登録データ")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.write("**会社名**")
+            st.write(row.get("company", "未取得"))
+            st.write("**分類 / セクター**")
+            st.write(auto_category or "未取得")
+        with c2:
+            st.write("**業種**")
+            st.write(auto_industry or "未取得")
+            st.write("**AIとの仮関連メモ**")
+            st.write(auto_relation)
+
+        st.markdown("### 📌 AI関連図へ登録")
+        default_categories = sorted(set(
+            df["category"].dropna().astype(str).tolist()
+            + [x.get("category", "") for x in st.session_state.get("favorite_stocks", [])]
+            + ["GPU", "メモリー", "冷却", "電力", "原子力", "光通信", "データセンター", "半導体製造装置", "素材", "日本AI関連", "IT・通信", "未分類"]
+            + ([auto_category] if auto_category else [])
+        ))
+
+        default_index = 0
+        if auto_category in default_categories:
+            default_index = default_categories.index(auto_category)
+
+        cc1, cc2, cc3 = st.columns([2, 2, 1])
+        with cc1:
+            selected_category = st.selectbox(
+                "登録カテゴリ",
+                default_categories,
+                index=default_index,
+                key=f"auto_cat_{row['ticker']}",
+            )
+        with cc2:
+            custom_category = st.text_input(
+                "新カテゴリ名",
+                value="",
+                key=f"auto_custom_cat_{row['ticker']}",
+                placeholder="例：AI通信・クラウド",
+            )
+        with cc3:
+            ai_score = st.selectbox(
+                "AI関連度",
+                [1, 2, 3, 4, 5],
+                index=2,
+                key=f"auto_score_{row['ticker']}",
+            )
+
+        final_category = custom_category.strip() if custom_category.strip() else selected_category
+
+        if st.button("この取得情報でAI関連図に登録", key=f"auto_register_{row['ticker']}", use_container_width=True):
+            add_favorite_stock(row["ticker"], row["company"], final_category)
+            st.success(f'{row["ticker"]} を「{final_category}」に登録しました。左メニューの「AI関連図」で確認できます。')
+
+        st.markdown("### 📋 stocks.csvに追加する行")
+        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},{final_category},{auto_business},{auto_relation},{ai_score},{auto_keywords},"",'
         st.code(sample, language="csv")
 
 # -----------------------------
@@ -1014,17 +1054,7 @@ def show_favorite_register(row, display_category):
     st.caption("※ 現在のお気に入り登録はセッション内保存です。サイトを再起動すると消える場合があります。永続保存は次段階で追加できます。")
 
 def show_stock_page(row):
-    try:
-        combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
-    except Exception as e:
-        st.warning(f"自動取得データの取得でエラーが出ました：{e}")
-        combined = {
-            "price": None, "prev_close": None, "change_pct": None, "market_cap": None,
-            "per": None, "forward_pe": None, "pbr": None, "forward_pbr": None,
-            "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
-            "currency": "", "sector": "", "industry": ""
-        }
-        source_map = {}
+    combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
 
     # 未登録銘柄でも、取得できた分類を優先して表示
     display_category = row.get("category", "未分類")
@@ -1060,9 +1090,12 @@ def show_stock_page(row):
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    show_add_to_db_hint(row)
+    show_add_to_db_hint(row, display_category, display_industry, display_business)
 
-    show_external_links(row)
+    try:
+        show_external_links(row)
+    except Exception as e:
+        st.warning(f"外部リンク表示をスキップしました：{e}")
 
     show_favorite_register(row, display_category)
 
@@ -1131,20 +1164,26 @@ def show_stock_page(row):
         metric_card("データ取得コード", row["yf_ticker"], "yfinance / API用コード")
 
     with st.expander("📌 取得元を確認する"):
-        show_source_table(source_map)
+        try:
+            show_source_table(source_map)
+        except Exception as e:
+            st.warning(f"取得元表示をスキップしました：{e}")
 
     st.caption("※ 自動取得データは参考値です。無料APIやyfinanceは欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
 
     st.subheader("📈 株価チャート")
-    hist = get_yf_history(row["yf_ticker"], period_map[period_label])
-    if hist.empty:
-        st.warning("チャートデータを取得できませんでした。")
-    else:
-        date_col = "Date" if "Date" in hist.columns else hist.columns[0]
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
-        fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
-        st.plotly_chart(fig, use_container_width=True)
+    try:
+        hist = get_yf_history(row["yf_ticker"], period_map.get(period_label, "6mo"))
+        if hist.empty:
+            st.warning("チャートデータを取得できませんでした。")
+        else:
+            date_col = "Date" if "Date" in hist.columns else hist.columns[0]
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
+            fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
+            st.plotly_chart(fig, use_container_width=True)
+    except Exception as e:
+        st.warning(f"チャート表示をスキップしました：{e}")
 
     st.subheader("🔗 関連銘柄")
     related = [x.strip().upper() for x in str(row["related"]).split(",") if x.strip()]
@@ -1161,8 +1200,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v9.2</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">v9安定版に、ティッカー保持の確実化とyfinance取得の安全化だけを追加した版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v13</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">v9安定版を土台に、未登録銘柄の自動仮登録だけを安全に追加した版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
@@ -1173,24 +1212,16 @@ st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / T")
 st.sidebar.caption("AI関連図は左メニューから確認できます。")
 
 if mode == "ティッカー検索":
-    st.text_input(
-        "ティッカーコードを入力",
-        key="ticker_search_input",
-        on_change=sync_ticker_input,
-    )
-
-    ticker = st.session_state.get("last_ticker", "NVDA").strip().upper()
-
-    hit = df[
-        (df["ticker"].str.upper() == ticker)
-        | (df["yf_ticker"].str.upper() == ticker)
-    ]
+    ticker = st.text_input("ティッカーコードを入力", value="NVDA").strip().upper()
+    hit = df[(df["ticker"] == ticker) | (df["yf_ticker"] == ticker)]
 
     if hit.empty:
-        st.error("そのティッカーはまだ登録されていません。stocks.csv に追加してください。")
-        st.dataframe(df[["ticker", "yf_ticker", "company", "category"]], use_container_width=True, hide_index=True)
+        virtual_row = make_virtual_row(ticker)
+        show_stock_page(virtual_row)
     else:
-        show_stock_page(hit.iloc[0])
+        row = hit.iloc[0].copy()
+        row["_virtual"] = False
+        show_stock_page(row)
 
 elif mode == "キーワード検索":
     keyword = st.text_input("キーワードを入力", value="冷却").strip()

@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v27", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v28", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v27 Clean
+# AI関連株コード辞典 v28 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -2184,15 +2184,6 @@ period_map = {"1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y"
 
 def show_external_links(row):
     st.subheader("🔎 外部調査リンク")
-    st.markdown(
-        """
-        <div class="notice">
-        <b>外部サイトの中身はコピーせず、リンクボタンだけを作ります。</b><br>
-        四季報・株探・バフェットコード等は、各サイトで直接確認するためのボタンです。
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     cols = st.columns(3)
     for i, (label, url) in enumerate(make_external_links(row)):
         with cols[i % 3]:
@@ -2333,28 +2324,11 @@ def show_stock_page(row):
     )
 
     if bool(row.get("_virtual", False)):
-        st.markdown(
-            """
-            <div class="notice">
-            <b>未登録銘柄です。</b><br>
-            無料API / yfinance から取得できた会社名・分類・業種・事業内容を自動反映しています。
-            APIキーを追加すると、より詳細な情報が出やすくなります。
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        pass
 
     st.markdown('<div class="v25-section-card"><div class="v25-section-title">▦ 自動取得データ</div>', unsafe_allow_html=True)
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
-        st.markdown(
-            """
-            <div class="notice">
-            現在は <b>yfinanceのみ</b> で取得しています。<br>
-            FMP_API_KEY / ALPHAVANTAGE_API_KEY / FINNHUB_API_KEY を Secrets に入れると、会社概要・PER/PBR/時価総額の補完ができます。
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        pass
     else:
         active = []
         if FMP_API_KEY: active.append("FMP")
@@ -2418,7 +2392,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v27</div>
+            <div class="hero-title-main">AI関連株コード辞典 v28</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2431,7 +2405,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v27</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v28</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

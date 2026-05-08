@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v13", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v12", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v13
+# AI関連株コード辞典 v12
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -900,11 +900,11 @@ def show_add_to_db_hint(row, display_category=None, display_industry=None, displ
         auto_keywords = f"{auto_category} {auto_industry} {row.get('company','')}"
 
         st.markdown(
-            """
+            f"""
             <div class="notice">
             <b>この銘柄はまだAI関連株DBには未登録です。</b><br>
-            外部データから取得できた情報を下に自動反映しました。<br>
-            必要ならカテゴリを変えて、AI関連図へ一時登録できます。
+            ただし、外部データから取得できた情報を下に自動反映しました。<br>
+            そのまま一時登録するか、必要ならカテゴリを変えて登録できます。
             </div>
             """,
             unsafe_allow_html=True,
@@ -968,48 +968,6 @@ def show_add_to_db_hint(row, display_category=None, display_industry=None, displ
         sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},{final_category},{auto_business},{auto_relation},{ai_score},{auto_keywords},"",'
         st.code(sample, language="csv")
 
-# -----------------------------
-# 表示
-# -----------------------------
-period_map = {"1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y", "5年": "5y"}
-
-def show_external_links(row):
-    st.subheader("🔎 外部調査リンク")
-    st.markdown(
-        """
-        <div class="notice">
-        <b>外部サイトの中身はコピーせず、リンクボタンだけを作ります。</b><br>
-        四季報・株探・バフェットコード等は、各サイトで直接確認するためのボタンです。
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    links = make_external_links(row)
-    cols = st.columns(3)
-    for i, (label, url) in enumerate(links):
-        with cols[i % 3]:
-            st.link_button(label, url, use_container_width=True)
-
-def show_source_table(source_map):
-    st.caption("各項目の取得元")
-    rows = []
-    for label, key in [
-        ("株価", "price"),
-        ("前日終値", "prev_close"),
-        ("前日比", "change_pct"),
-        ("時価総額", "market_cap"),
-        ("PER", "per"),
-        ("予想PER", "forward_pe"),
-        ("PBR", "pbr"),
-        ("予想PBR", "forward_pbr"),
-        ("52週高値", "fifty_two_high"),
-        ("52週安値", "fifty_two_low"),
-        ("配当利回り", "dividend_yield"),
-    ]:
-        rows.append({"項目": label, "取得元": source_map.get(key, "未取得")})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-
-
 def show_favorite_register(row, display_category):
     st.subheader("⭐ AI関連図にお気に入り登録")
 
@@ -1052,6 +1010,59 @@ def show_favorite_register(row, display_category):
             st.info(f'{row["ticker"]} をお気に入りから解除しました。')
 
     st.caption("※ 現在のお気に入り登録はセッション内保存です。サイトを再起動すると消える場合があります。永続保存は次段階で追加できます。")
+
+
+def show_external_links(row):
+    st.subheader("🔎 外部調査リンク")
+    st.markdown(
+        """
+        <div class="notice">
+        <b>外部サイトの中身はコピーせず、リンクボタンだけを作ります。</b><br>
+        四季報・株探・バフェットコード等は、各サイトで直接確認するためのボタンです。
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    try:
+        links = make_external_links(row)
+        cols = st.columns(3)
+        for i, (label, url) in enumerate(links):
+            with cols[i % 3]:
+                st.link_button(label, url, use_container_width=True)
+    except Exception as e:
+        st.warning(f"外部リンクの生成でエラーが出ました：{e}")
+
+
+def show_source_table(source_map):
+    """
+    自動取得データの各項目が、どのデータ元から取れたかを表示する。
+    source_map が未定義・空でもアプリが止まらないようにする。
+    """
+    try:
+        rows = []
+        labels = [
+            ("株価", "price"),
+            ("前日終値", "prev_close"),
+            ("前日比", "change_pct"),
+            ("時価総額", "market_cap"),
+            ("PER", "per"),
+            ("予想PER", "forward_pe"),
+            ("PBR", "pbr"),
+            ("予想PBR", "forward_pbr"),
+            ("52週高値", "fifty_two_high"),
+            ("52週安値", "fifty_two_low"),
+            ("配当利回り", "dividend_yield"),
+        ]
+
+        for label, key in labels:
+            rows.append({
+                "項目": label,
+                "取得元": source_map.get(key, "未取得") if isinstance(source_map, dict) else "未取得"
+            })
+
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    except Exception as e:
+        st.warning(f"取得元テーブルを表示できませんでした：{e}")
 
 def show_stock_page(row):
     combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
@@ -1172,18 +1183,15 @@ def show_stock_page(row):
     st.caption("※ 自動取得データは参考値です。無料APIやyfinanceは欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
 
     st.subheader("📈 株価チャート")
-    try:
-        hist = get_yf_history(row["yf_ticker"], period_map.get(period_label, "6mo"))
-        if hist.empty:
-            st.warning("チャートデータを取得できませんでした。")
-        else:
-            date_col = "Date" if "Date" in hist.columns else hist.columns[0]
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
-            fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
-            st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.warning(f"チャート表示をスキップしました：{e}")
+    hist = get_yf_history(row["yf_ticker"], period_map[period_label])
+    if hist.empty:
+        st.warning("チャートデータを取得できませんでした。")
+    else:
+        date_col = "Date" if "Date" in hist.columns else hist.columns[0]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
+        fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("🔗 関連銘柄")
     related = [x.strip().upper() for x in str(row["related"]).split(",") if x.strip()]
@@ -1200,8 +1208,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v13</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">v9安定版を土台に、未登録銘柄の自動仮登録だけを安全に追加した版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v12</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">取得元表示エラーを修正し、未登録銘柄でも株価・自動取得データまで正常表示する版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

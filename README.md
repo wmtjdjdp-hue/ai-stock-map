@@ -1,3 +1,11 @@
+# AI関連株コード辞典 v33 Google Save Debug
+
+## v33で修正した内容
+- Googleスプレッドシート保存失敗時の原因を詳しく表示
+- append_rowではなくA列〜J列の次の空行にupdateする方式へ変更
+- API設定確認に「Google保存テスト」ボタンを追加
+- エラー内容が空白になる問題を改善
+
 # AI関連株コード辞典 v32 Google Sheets Safe Error
 
 ## v32で修正した内容

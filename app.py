@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v32", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v33", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v32 Clean
+# AI関連株コード辞典 v33 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -299,9 +299,15 @@ def save_stock_to_google_sheet(row, category=None):
     try:
         ws = get_gspread_worksheet()
     except Exception as e:
-        return False, f"Googleスプレッドシート接続エラー：{e}"
+        msg = f"Googleスプレッドシート接続エラー：{type(e).__name__} / {str(e) or repr(e)}"
+        st.session_state.google_sheet_last_error = msg
+        return False, msg
+
     if ws is None:
-        return False, st.session_state.get("google_sheet_last_error", "Googleスプレッドシート未設定")
+        msg = st.session_state.get("google_sheet_last_error", "")
+        if not msg:
+            msg = "Googleスプレッドシートに接続できません。API設定確認の接続エラーを確認してください。"
+        return False, msg
 
     ticker = str(row.get("ticker", "")).upper().strip()
     if not ticker:
@@ -313,27 +319,53 @@ def save_stock_to_google_sheet(row, category=None):
         str(row.get("yf_ticker", ticker)).upper().strip(),
         str(row.get("company", ticker)).strip(),
         final_category,
-        str(row.get("business", "")).replace("\n", " ").strip(),
-        str(row.get("ai_relation", "")).replace("\n", " ").strip(),
+        str(row.get("business", "")).replace("\n", " ").replace("\r", " ").strip(),
+        str(row.get("ai_relation", "")).replace("\n", " ").replace("\r", " ").strip(),
         str(row.get("ai_score", 3)),
-        str(row.get("keywords", "")).replace("\n", " ").strip(),
-        str(row.get("related", "")).replace("\n", " ").strip(),
+        str(row.get("keywords", "")).replace("\n", " ").replace("\r", " ").strip(),
+        str(row.get("related", "")).replace("\n", " ").replace("\r", " ").strip(),
         str(row.get("official_ir_url", "")).strip(),
     ]
 
     try:
-        tickers = [x.upper() for x in ws.col_values(1)]
+        # ヘッダー確認。空なら作る。
+        try:
+            header = ws.row_values(1)
+            if not header:
+                ws.append_row(REGISTER_COLS)
+            elif header[:len(REGISTER_COLS)] != REGISTER_COLS:
+                ws.update("A1:J1", [REGISTER_COLS])
+        except Exception:
+            pass
+
+        tickers = [str(x).upper().strip() for x in ws.col_values(1)]
+
         if ticker in tickers:
             row_no = tickers.index(ticker) + 1
             ws.update(f"A{row_no}:J{row_no}", [values])
-            load_google_sheet_stocks.clear()
+            try:
+                load_google_sheet_stocks.clear()
+            except Exception:
+                pass
+            st.session_state.google_sheet_last_error = ""
             return True, "Googleスプレッドシートの既存行を更新しました"
         else:
-            ws.append_row(values)
-            load_google_sheet_stocks.clear()
+            # append_rowで失敗する環境もあるので、次の空行にupdateする方式に変更
+            next_row = len(tickers) + 1
+            if next_row < 2:
+                next_row = 2
+            ws.update(f"A{next_row}:J{next_row}", [values])
+            try:
+                load_google_sheet_stocks.clear()
+            except Exception:
+                pass
+            st.session_state.google_sheet_last_error = ""
             return True, "Googleスプレッドシートに追加しました"
+
     except Exception as e:
-        return False, f"保存エラー：{e}"
+        msg = f"保存エラー：{type(e).__name__} / {str(e) or repr(e)}"
+        st.session_state.google_sheet_last_error = msg
+        return False, msg
 
 def delete_stock_from_google_sheet(ticker):
     try:
@@ -2576,7 +2608,7 @@ def show_register_box(row):
         if saved:
             st.success(f'{row["ticker"]} を「{final_cat}」に永久保存しました。AI関連図と登録銘柄一覧で確認できます。')
         else:
-            st.warning(f'{row["ticker"]} を一時登録しました。永久保存は未完了：{msg}')
+            st.warning(f'{row["ticker"]} を一時登録しました。永久保存は未完了：{msg if msg else "原因不明。API設定確認の接続エラーを見てください。"}')
 
     if bool(row.get("_virtual", False)):
         st.markdown("### 📋 stocks.csvに追加する行")
@@ -2656,7 +2688,7 @@ def show_stock_page(row):
         if saved:
             st.success(f'{row["ticker"]} を「{display_category}」に永久保存しました。{msg}')
         else:
-            st.warning(f'{row["ticker"]} を一時登録しました。永久保存は未完了：{msg}')
+            st.warning(f'{row["ticker"]} を一時登録しました。永久保存は未完了：{msg if msg else "原因不明。API設定確認の接続エラーを見てください。"}')
 
     if search_clicked:
         sync_ticker_input()
@@ -2758,7 +2790,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v32</div>
+            <div class="hero-title-main">AI関連株コード辞典 v33</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2771,7 +2803,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v32</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v33</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -2915,6 +2947,26 @@ elif mode == "API設定確認":
     st.write("gcp_service_account:", "設定済み" if get_service_account_info() else "未設定")
     st.write("gspread:", "使用可能" if gspread is not None else "未インストール")
     st.write("接続エラー:", st.session_state.get("google_sheet_last_error", "") or "なし")
+
+    if st.button("Google保存テスト", use_container_width=True):
+        test_row = {
+            "ticker": "TEST",
+            "yf_ticker": "TEST",
+            "company": "接続テスト",
+            "category": "テスト",
+            "business": "Googleスプレッドシート保存テスト",
+            "ai_relation": "テスト",
+            "ai_score": 1,
+            "keywords": "test",
+            "related": "",
+            "official_ir_url": "",
+        }
+        ok, msg = save_stock_to_google_sheet(test_row, "テスト")
+        if ok:
+            st.success("Google保存テスト成功：" + msg)
+        else:
+            st.error("Google保存テスト失敗：" + msg)
+
 
     st.markdown(
         """

@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v18", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v19", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v18 Clean
+# AI関連株コード辞典 v19 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -761,6 +761,65 @@ st.markdown(
         margin-bottom: 6px;
         text-shadow: 0 2px 10px rgba(0,0,0,.28);
     }
+    /* AI_STOCK_V19_IDENTITY_TABLE_CSS */
+
+    .identity-box {
+        background: #ffffff !important;
+        border: 2px solid #d1d5db !important;
+        border-radius: 18px !important;
+        padding: 18px 20px !important;
+        margin-bottom: 16px !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,.12) !important;
+    }
+    .identity-row {
+        display: grid;
+        grid-template-columns: 170px 1fr;
+        gap: 14px;
+        align-items: baseline;
+        padding: 9px 0;
+        border-bottom: 1px solid #eef2f7;
+    }
+    .identity-row:last-child {
+        border-bottom: none;
+    }
+    .identity-label {
+        color: #0f172a !important;
+        font-size: 18px !important;
+        font-weight: 950 !important;
+        letter-spacing: .02em;
+        white-space: nowrap;
+        opacity: 1 !important;
+    }
+    .identity-company {
+        color: #111827 !important;
+        font-size: 34px !important;
+        font-weight: 950 !important;
+        line-height: 1.08 !important;
+        word-break: break-word;
+        text-shadow: none !important;
+        margin-bottom: 0 !important;
+    }
+    .identity-ticker {
+        color: #0b1f4d !important;
+        font-size: 42px !important;
+        font-weight: 950 !important;
+        line-height: 1.0 !important;
+        letter-spacing: .02em;
+        text-shadow: none !important;
+        margin-bottom: 0 !important;
+    }
+    @media (max-width: 720px) {
+        .identity-row {
+            grid-template-columns: 1fr;
+            gap: 4px;
+        }
+        .identity-company {
+            font-size: 28px !important;
+        }
+        .identity-ticker {
+            font-size: 36px !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -942,14 +1001,18 @@ def show_stock_page(row):
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
     col1, col2 = st.columns([1.1, 2])
     with col1:
-        display_company_name = clean_company_name(row["company"]) or row["ticker"]
+        display_company_name = clean_company_name(row["company"]) or row["ticker"] or row["ticker"]
         st.markdown(
             f"""
             <div class="identity-box">
-                <div class="identity-label">会社名</div>
-                <div class="identity-company">{display_company_name}</div>
-                <div class="identity-label">ティッカーコード</div>
-                <div class="identity-ticker">{row["ticker"]}</div>
+                <div class="identity-row">
+                    <div class="identity-label">会社名</div>
+                    <div class="identity-company">{display_company_name}</div>
+                </div>
+                <div class="identity-row">
+                    <div class="identity-label">ティッカーコード</div>
+                    <div class="identity-ticker">{row["ticker"]}</div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1046,8 +1109,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v18</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">会社名/ティッカーコードを濃く大きく表示し、視認性を改善した版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v19</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">会社名とティッカーコードを白背景カードで黒〜紺色に見やすく表示する版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

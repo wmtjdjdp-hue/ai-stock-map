@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v14", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v9.1", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v14
+# AI関連株コード辞典 v9.1
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -874,101 +874,19 @@ def make_virtual_row(ticker):
         "_virtual": True,
     })
 
-def auto_ai_relation_from_category(category, industry):
-    text = f"{category} {industry}".lower()
-
-    if any(k in text for k in ["semiconductor", "chip", "electronic", "technology"]):
-        return "半導体・電子部品・AIインフラの観点で関連候補。詳細は後で自分メモに追記。"
-    if any(k in text for k in ["telecom", "communication", "network", "wireless"]):
-        return "通信インフラ・クラウド接続・データセンター通信の観点でAI関連候補。"
-    if any(k in text for k in ["utility", "electric", "energy", "power"]):
-        return "AIデータセンターの電力需要・送電・発電インフラの観点で関連候補。"
-    if any(k in text for k in ["real estate", "reit", "data center"]):
-        return "データセンター・施設インフラの観点でAI関連候補。"
-    if any(k in text for k in ["software", "cloud", "internet", "services"]):
-        return "ソフトウェア・クラウド・AIサービス利用拡大の観点で関連候補。"
-    if any(k in text for k in ["industrial", "machinery", "engineering", "construction"]):
-        return "設備投資・インフラ・製造装置の観点でAI関連候補。"
-    if any(k in text for k in ["materials", "mining", "copper", "chemical"]):
-        return "素材・資源・電線・設備材料の観点でAIインフラ関連候補。"
-
-    return "取得分類からAI関連候補として仮登録。詳しい関連理由は後で自分メモに追記。"
-
-def show_add_to_db_hint(row, display_category=None, display_industry=None, display_business=None):
+def show_add_to_db_hint(row):
     if bool(row.get("_virtual", False)):
-        auto_category = display_category or row.get("category", "未分類") or "未分類"
-        auto_industry = display_industry or ""
-        auto_business = display_business or row.get("business", "")
-        auto_relation = auto_ai_relation_from_category(auto_category, auto_industry)
-        auto_keywords = f"{auto_category} {auto_industry} {row.get('company','')}"
-
         st.markdown(
             """
             <div class="notice">
             <b>この銘柄はまだAI関連株DBには未登録です。</b><br>
-            外部データから取得できた情報を下に自動反映しました。<br>
-            必要ならカテゴリを変えて、AI関連図へ一時登録できます。
+            株価・チャート・外部リンクは表示できます。<br>
+            AIカテゴリ、関連図、関連銘柄に入れたい場合は、下の「stocks.csvに追加する行」をコピーして追加してください。
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-        st.markdown("### 🧩 自動取得から作った仮登録データ")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("**会社名**")
-            st.write(row.get("company", "未取得"))
-            st.write("**分類 / セクター**")
-            st.write(auto_category or "未取得")
-        with c2:
-            st.write("**業種**")
-            st.write(auto_industry or "未取得")
-            st.write("**AIとの仮関連メモ**")
-            st.write(auto_relation)
-
-        st.markdown("### 📌 AI関連図へ登録")
-        default_categories = sorted(set(
-            df["category"].dropna().astype(str).tolist()
-            + [x.get("category", "") for x in st.session_state.get("favorite_stocks", [])]
-            + ["GPU", "メモリー", "冷却", "電力", "原子力", "光通信", "データセンター", "半導体製造装置", "素材", "日本AI関連", "IT・通信", "未分類"]
-            + ([auto_category] if auto_category else [])
-        ))
-
-        default_index = 0
-        if auto_category in default_categories:
-            default_index = default_categories.index(auto_category)
-
-        cc1, cc2, cc3 = st.columns([2, 2, 1])
-        with cc1:
-            selected_category = st.selectbox(
-                "登録カテゴリ",
-                default_categories,
-                index=default_index,
-                key=f"auto_cat_{row['ticker']}",
-            )
-        with cc2:
-            custom_category = st.text_input(
-                "新カテゴリ名",
-                value="",
-                key=f"auto_custom_cat_{row['ticker']}",
-                placeholder="例：AI通信・クラウド",
-            )
-        with cc3:
-            ai_score = st.selectbox(
-                "AI関連度",
-                [1, 2, 3, 4, 5],
-                index=2,
-                key=f"auto_score_{row['ticker']}",
-            )
-
-        final_category = custom_category.strip() if custom_category.strip() else selected_category
-
-        if st.button("この取得情報でAI関連図に登録", key=f"auto_register_{row['ticker']}", use_container_width=True):
-            add_favorite_stock(row["ticker"], row["company"], final_category)
-            st.success(f'{row["ticker"]} を「{final_category}」に登録しました。左メニューの「AI関連図」で確認できます。')
-
-        st.markdown("### 📋 stocks.csvに追加する行")
-        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},{final_category},{auto_business},{auto_relation},{ai_score},{auto_keywords},"",'
+        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},未分類,事業内容を入力,AIとの関係を入力,3,キーワードを入力,"",'
         st.code(sample, language="csv")
 
 # -----------------------------
@@ -1093,17 +1011,11 @@ def show_stock_page(row):
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    show_add_to_db_hint(row, display_category, display_industry, display_business)
+    show_add_to_db_hint(row)
 
-    try:
-        show_external_links(row)
-    except Exception as e:
-        st.warning(f"外部リンク表示をスキップしました：{e}")
+    show_external_links(row)
 
-    # 未登録銘柄は show_add_to_db_hint 内で仮登録欄を出すので、
-    # 通常のお気に入り登録欄は登録済み銘柄だけ表示する。
-    if not bool(row.get("_virtual", False)):
-        show_favorite_register(row, display_category)
+    show_favorite_register(row, display_category)
 
     st.subheader("📊 自動取得データ：複数ソース補完")
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
@@ -1170,26 +1082,20 @@ def show_stock_page(row):
         metric_card("データ取得コード", row["yf_ticker"], "yfinance / API用コード")
 
     with st.expander("📌 取得元を確認する"):
-        try:
-            show_source_table(source_map)
-        except Exception as e:
-            st.warning(f"取得元表示をスキップしました：{e}")
+        show_source_table(source_map)
 
     st.caption("※ 自動取得データは参考値です。無料APIやyfinanceは欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
 
     st.subheader("📈 株価チャート")
-    try:
-        hist = get_yf_history(row["yf_ticker"], period_map.get(period_label, "6mo"))
-        if hist.empty:
-            st.warning("チャートデータを取得できませんでした。")
-        else:
-            date_col = "Date" if "Date" in hist.columns else hist.columns[0]
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
-            fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
-            st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.warning(f"チャート表示をスキップしました：{e}")
+    hist = get_yf_history(row["yf_ticker"], period_map[period_label])
+    if hist.empty:
+        st.warning("チャートデータを取得できませんでした。")
+    else:
+        date_col = "Date" if "Date" in hist.columns else hist.columns[0]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
+        fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
 
     st.subheader("🔗 関連銘柄")
     related = [x.strip().upper() for x in str(row["related"]).split(",") if x.strip()]
@@ -1206,8 +1112,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v14</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">登録欄の重複を修正し、最後に入力したティッカーを保持する版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v9.1</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">v9安定版に、最後に入力したティッカーを保持する機能だけを追加した版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
@@ -1218,16 +1124,7 @@ st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / T")
 st.sidebar.caption("AI関連図は左メニューから確認できます。")
 
 if mode == "ティッカー検索":
-    ticker_input = st.text_input(
-        "ティッカーコードを入力",
-        value=st.session_state.get("last_ticker", "NVDA"),
-        key="ticker_search_input",
-    )
-    ticker = ticker_input.strip().upper()
-
-    if ticker:
-        st.session_state.last_ticker = ticker
-
+    ticker = st.text_input("ティッカーコードを入力", value="NVDA").strip().upper()
     hit = df[(df["ticker"] == ticker) | (df["yf_ticker"] == ticker)]
 
     if hit.empty:

@@ -8,92 +8,29 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v14", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v15", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v14
+# AI関連株コード辞典 v15 Clean
 # 目的：
-# yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
-#
-# 優先順位：
-# 1. yfinance
-# 2. FMP_API_KEY があれば Financial Modeling Prep
-# 3. FINNHUB_API_KEY があれば Finnhub
-# 4. ALPHAVANTAGE_API_KEY があれば Alpha Vantage
-# 5. 取れなければ「未取得」
-#
-# Streamlit Cloud の Secrets に入れる例：
-# FMP_API_KEY = "あなたのFMPキー"
-# ALPHAVANTAGE_API_KEY = "あなたのAlpha Vantageキー"
-# FINNHUB_API_KEY = "あなたのFinnhubキー"
+# - 登録済み銘柄は stocks.csv を優先
+# - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
+# - AIとのつながりは、取得した業種/説明文から仮メモ生成
+# - スクレイピングではなく、API/公開エンドポイントのみ使用
 # ============================================================
 
-# -----------------------------
-# データ読み込み
-# -----------------------------
 @st.cache_data
 def load_data():
     path = Path(__file__).parent / "stocks.csv"
     df = pd.read_csv(path)
     df["ticker"] = df["ticker"].astype(str).str.upper()
     df["yf_ticker"] = df["yf_ticker"].astype(str).str.upper()
-    df["keywords"] = df["keywords"].fillna("")
-    df["related"] = df["related"].fillna("")
-    df["official_ir_url"] = df["official_ir_url"].fillna("")
+    for col in ["company", "category", "business", "ai_relation", "keywords", "related", "official_ir_url"]:
+        df[col] = df[col].fillna("")
     return df
 
 df = load_data()
 
-# -----------------------------
-# お気に入り登録：セッション内保存
-# 注意：Streamlit Community Cloudでは、ここでの登録はセッション内保存です。
-# 永続保存したい場合は、次段階でGoogle Sheets / Supabase / SQLite等に接続します。
-# -----------------------------
-def init_favorites():
-    if "favorite_stocks" not in st.session_state:
-        st.session_state.favorite_stocks = []
-
-init_favorites()
-
-if "last_ticker" not in st.session_state:
-    st.session_state.last_ticker = "NVDA"
-
-def add_favorite_stock(ticker, company, category):
-    ticker = str(ticker).upper().strip()
-    company = str(company).strip()
-    category = str(category).strip() or "未分類"
-
-    # 同じティッカーが既にあればカテゴリを更新
-    updated = False
-    for item in st.session_state.favorite_stocks:
-        if item["ticker"].upper() == ticker:
-            item["company"] = company
-            item["category"] = category
-            updated = True
-            break
-
-    if not updated:
-        st.session_state.favorite_stocks.append({
-            "ticker": ticker,
-            "company": company,
-            "category": category,
-        })
-
-def remove_favorite_stock(ticker):
-    ticker = str(ticker).upper().strip()
-    st.session_state.favorite_stocks = [
-        x for x in st.session_state.favorite_stocks
-        if x["ticker"].upper() != ticker
-    ]
-
-def favorite_dataframe():
-    if not st.session_state.favorite_stocks:
-        return pd.DataFrame(columns=["ticker", "company", "category"])
-    return pd.DataFrame(st.session_state.favorite_stocks)
-
-# -----------------------------
-# Secrets
-# -----------------------------
 def get_secret(name):
     try:
         return st.secrets.get(name, "")
@@ -104,28 +41,38 @@ FMP_API_KEY = get_secret("FMP_API_KEY")
 ALPHAVANTAGE_API_KEY = get_secret("ALPHAVANTAGE_API_KEY")
 FINNHUB_API_KEY = get_secret("FINNHUB_API_KEY")
 
+if "favorite_stocks" not in st.session_state:
+    st.session_state.favorite_stocks = []
+if "last_ticker" not in st.session_state:
+    st.session_state.last_ticker = "NVDA"
+if "ticker_search_input" not in st.session_state:
+    st.session_state.ticker_search_input = st.session_state.last_ticker
+
+def sync_ticker_input():
+    value = st.session_state.get("ticker_search_input", "").strip().upper()
+    if value:
+        st.session_state.last_ticker = value
+
 # -----------------------------
-# 共通フォーマット
+# 表示ユーティリティ
 # -----------------------------
+def pick_first(*values):
+    for v in values:
+        if v is not None and v != "" and not (isinstance(v, float) and pd.isna(v)):
+            return v
+    return None
+
 def stars(n):
     try:
         n = int(n)
     except Exception:
         n = 0
+    n = max(0, min(5, n))
     return "★" * n + "☆" * (5 - n)
-
-def fmt_num(x, decimals=2):
-    if x is None or x == "" or pd.isna(x):
-        return "未取得"
-    try:
-        return f"{float(x):,.{decimals}f}"
-    except Exception:
-        return str(x)
-
 
 def currency_symbol(currency):
     c = str(currency or "").upper()
-    symbols = {
+    return {
         "USD": "$",
         "JPY": "¥",
         "KRW": "₩",
@@ -133,19 +80,9 @@ def currency_symbol(currency):
         "GBP": "£",
         "CAD": "C$",
         "AUD": "A$",
-        "CHF": "CHF",
         "HKD": "HK$",
         "CNY": "¥",
-    }
-    return symbols.get(c, c + " " if c else "")
-
-def fmt_price_short(x, currency=""):
-    if x is None or x == "" or pd.isna(x):
-        return "未取得"
-    try:
-        return f"{currency_symbol(currency)}{float(x):,.2f}"
-    except Exception:
-        return str(x)
+    }.get(c, c + " " if c else "")
 
 def fmt_price(x, currency=""):
     if x is None or x == "" or pd.isna(x):
@@ -155,11 +92,20 @@ def fmt_price(x, currency=""):
     except Exception:
         return str(x)
 
+def fmt_num(x, decimals=2):
+    if x is None or x == "" or pd.isna(x):
+        return "未取得"
+    try:
+        return f"{float(x):,.{decimals}f}"
+    except Exception:
+        return str(x)
+
 def fmt_percent(x):
     if x is None or x == "" or pd.isna(x):
         return "未取得"
     try:
-        return f"{float(x):+.2f}%"
+        sign = "+" if float(x) >= 0 else ""
+        return f"{sign}{float(x):.2f}%"
     except Exception:
         return str(x)
 
@@ -178,7 +124,6 @@ def fmt_market_cap(x):
     except Exception:
         return str(x)
 
-
 def metric_card(label, value, sub=None):
     sub_html = f'<div class="metric-sub">{sub}</div>' if sub else '<div class="metric-sub">&nbsp;</div>'
     st.markdown(
@@ -195,24 +140,9 @@ def metric_card(label, value, sub=None):
 def delta_text(change_pct):
     if change_pct is None or change_pct == "" or pd.isna(change_pct):
         return "前日比：未取得"
-    try:
-        sign = "+" if float(change_pct) >= 0 else ""
-        return f"前日比：{sign}{float(change_pct):.2f}%"
-    except Exception:
-        return f"前日比：{change_pct}"
+    return f"前日比：{fmt_percent(change_pct)}"
 
-def pick_first(*values):
-    for v in values:
-        if v is not None and v != "" and not (isinstance(v, float) and pd.isna(v)):
-            return v
-    return None
-
-def is_us_like_ticker(ticker):
-    t = str(ticker).upper()
-    return "." not in t and t.isalpha()
-
-def to_alpha_symbol(yf_ticker):
-    # Alpha Vantage/FMP用。日本株や韓国株はまず対象外扱い。
+def to_api_symbol(yf_ticker):
     t = str(yf_ticker).upper().strip()
     if "." in t:
         return ""
@@ -232,6 +162,72 @@ def jp_code(yf_ticker):
 # yfinance
 # -----------------------------
 @st.cache_data(ttl=1800)
+def get_yf_data(yf_ticker):
+    result = {
+        "price": None, "prev_close": None, "change_pct": None,
+        "market_cap": None, "per": None, "forward_pe": None, "pbr": None,
+        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
+        "currency": "", "company": "", "sector": "", "industry": "", "description": "",
+    }
+    try:
+        t = yf.Ticker(yf_ticker)
+
+        try:
+            fast = t.fast_info
+            def fget(obj, key):
+                try:
+                    return getattr(obj, key)
+                except Exception:
+                    try:
+                        return obj.get(key)
+                    except Exception:
+                        return None
+            result["price"] = pick_first(fget(fast, "last_price"), fget(fast, "lastPrice"))
+            result["prev_close"] = pick_first(fget(fast, "previous_close"), fget(fast, "previousClose"))
+            result["market_cap"] = pick_first(fget(fast, "market_cap"), fget(fast, "marketCap"))
+            result["currency"] = pick_first(fget(fast, "currency"), "")
+            result["fifty_two_high"] = pick_first(fget(fast, "year_high"), fget(fast, "yearHigh"))
+            result["fifty_two_low"] = pick_first(fget(fast, "year_low"), fget(fast, "yearLow"))
+        except Exception:
+            pass
+
+        try:
+            info = t.info or {}
+            result["company"] = pick_first(info.get("longName"), info.get("shortName"), "")
+            result["sector"] = pick_first(info.get("sector"), "")
+            result["industry"] = pick_first(info.get("industry"), "")
+            result["description"] = pick_first(info.get("longBusinessSummary"), "")
+            result["price"] = pick_first(result["price"], info.get("currentPrice"), info.get("regularMarketPrice"))
+            result["prev_close"] = pick_first(result["prev_close"], info.get("previousClose"))
+            result["market_cap"] = pick_first(result["market_cap"], info.get("marketCap"))
+            result["per"] = pick_first(info.get("trailingPE"))
+            result["forward_pe"] = pick_first(info.get("forwardPE"))
+            result["pbr"] = pick_first(info.get("priceToBook"))
+            result["fifty_two_high"] = pick_first(result["fifty_two_high"], info.get("fiftyTwoWeekHigh"))
+            result["fifty_two_low"] = pick_first(result["fifty_two_low"], info.get("fiftyTwoWeekLow"))
+            result["dividend_yield"] = pick_first(info.get("dividendYield"))
+            result["currency"] = pick_first(result["currency"], info.get("currency"), "")
+        except Exception:
+            pass
+
+        try:
+            hist = t.history(period="5d")
+            if hist is not None and not hist.empty:
+                closes = hist["Close"].dropna().tolist()
+                if len(closes) >= 1:
+                    result["price"] = pick_first(result["price"], closes[-1])
+                if len(closes) >= 2:
+                    result["prev_close"] = pick_first(result["prev_close"], closes[-2])
+        except Exception:
+            pass
+
+        if result["price"] is not None and result["prev_close"] not in [None, 0]:
+            result["change_pct"] = (float(result["price"]) - float(result["prev_close"])) / float(result["prev_close"]) * 100
+    except Exception:
+        pass
+    return result
+
+@st.cache_data(ttl=1800)
 def get_yf_history(yf_ticker, period):
     try:
         hist = yf.Ticker(yf_ticker).history(period=period)
@@ -241,132 +237,34 @@ def get_yf_history(yf_ticker, period):
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data(ttl=1800)
-def get_yfinance_data(yf_ticker):
-    result = {
-        "source": "yfinance",
-        "price": None,
-        "prev_close": None,
-        "change_pct": None,
-        "market_cap": None,
-        "per": None,
-        "forward_pe": None,
-        "pbr": None,
-        "forward_pbr": None,
-        "fifty_two_high": None,
-        "fifty_two_low": None,
-        "dividend_yield": None,
-        "currency": "",
-        "sector": "",
-        "industry": "",
-    }
-
-    try:
-        t = yf.Ticker(yf_ticker)
-
-        # fast_info
-        try:
-            fast = t.fast_info
-            result["price"] = getattr(fast, "last_price", None) or fast.get("last_price")
-            result["prev_close"] = getattr(fast, "previous_close", None) or fast.get("previous_close")
-            result["market_cap"] = getattr(fast, "market_cap", None) or fast.get("market_cap")
-            result["currency"] = getattr(fast, "currency", "") or fast.get("currency", "")
-        except Exception:
-            pass
-
-        # info
-        try:
-            info = t.info or {}
-            result["price"] = pick_first(result["price"], info.get("currentPrice"), info.get("regularMarketPrice"))
-            result["prev_close"] = pick_first(result["prev_close"], info.get("previousClose"))
-            result["market_cap"] = pick_first(result["market_cap"], info.get("marketCap"))
-            result["per"] = pick_first(info.get("trailingPE"))
-            result["forward_pe"] = pick_first(info.get("forwardPE"))
-            result["pbr"] = pick_first(info.get("priceToBook"))
-            result["fifty_two_high"] = pick_first(info.get("fiftyTwoWeekHigh"))
-            result["fifty_two_low"] = pick_first(info.get("fiftyTwoWeekLow"))
-            result["dividend_yield"] = pick_first(info.get("dividendYield"))
-            result["currency"] = pick_first(result["currency"], info.get("currency"), "")
-            result["sector"] = pick_first(info.get("sector"), "")
-            result["industry"] = pick_first(info.get("industry"), "")
-        except Exception:
-            pass
-
-        # history backup
-        if result["price"] is None or result["prev_close"] is None:
-            hist = t.history(period="5d")
-            if hist is not None and not hist.empty:
-                closes = hist["Close"].dropna().tolist()
-                if len(closes) >= 1:
-                    result["price"] = pick_first(result["price"], closes[-1])
-                if len(closes) >= 2:
-                    result["prev_close"] = pick_first(result["prev_close"], closes[-2])
-
-        if result["price"] is not None and result["prev_close"] not in [None, 0]:
-            result["change_pct"] = (float(result["price"]) - float(result["prev_close"])) / float(result["prev_close"]) * 100
-
-    except Exception:
-        pass
-
-    return result
-
 # -----------------------------
-# Financial Modeling Prep
+# FMP
 # -----------------------------
 @st.cache_data(ttl=3600)
 def get_fmp_data(symbol, api_key):
     result = {
-        "source": "FMP",
-        "price": None,
-        "prev_close": None,
-        "change_pct": None,
-        "market_cap": None,
-        "per": None,
-        "forward_pe": None,
-        "pbr": None,
-        "forward_pbr": None,
-        "fifty_two_high": None,
-        "fifty_two_low": None,
-        "dividend_yield": None,
-        "currency": "USD",
-        "sector": "",
-        "industry": "",
+        "price": None, "prev_close": None, "change_pct": None,
+        "market_cap": None, "per": None, "forward_pe": None, "pbr": None,
+        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
+        "currency": "", "company": "", "sector": "", "industry": "", "description": "",
     }
-
-    if not api_key or not symbol:
+    if not symbol or not api_key:
         return result
-
     try:
-        # profile endpoint
-        url = f"https://financialmodelingprep.com/api/v3/profile/{symbol}?apikey={api_key}"
-        r = requests.get(url, timeout=10)
+        r = requests.get(f"https://financialmodelingprep.com/api/v3/profile/{symbol}?apikey={api_key}", timeout=10)
         if r.ok:
             data = r.json()
             if isinstance(data, list) and data:
                 p = data[0]
+                result["company"] = pick_first(p.get("companyName"), "")
+                result["sector"] = pick_first(p.get("sector"), "")
+                result["industry"] = pick_first(p.get("industry"), "")
+                result["description"] = pick_first(p.get("description"), "")
                 result["price"] = pick_first(p.get("price"))
                 result["market_cap"] = pick_first(p.get("mktCap"))
                 result["currency"] = pick_first(p.get("currency"), "USD")
-                result["sector"] = pick_first(p.get("sector"), "")
-                result["industry"] = pick_first(p.get("industry"), "")
-                result["fifty_two_high"] = pick_first(p.get("range", "").split("-")[-1].strip() if isinstance(p.get("range"), str) and "-" in p.get("range") else None)
-                result["fifty_two_low"] = pick_first(p.get("range", "").split("-")[0].strip() if isinstance(p.get("range"), str) and "-" in p.get("range") else None)
 
-        # ratios ttm endpoint
-        url = f"https://financialmodelingprep.com/api/v3/ratios-ttm/{symbol}?apikey={api_key}"
-        r = requests.get(url, timeout=10)
-        if r.ok:
-            data = r.json()
-            if isinstance(data, list) and data:
-                rr = data[0]
-                result["per"] = pick_first(rr.get("peRatioTTM"))
-                result["pbr"] = pick_first(rr.get("priceToBookRatioTTM"))
-                dy = pick_first(rr.get("dividendYielTTM"), rr.get("dividendYieldTTM"))
-                result["dividend_yield"] = dy
-
-        # quote endpoint
-        url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={api_key}"
-        r = requests.get(url, timeout=10)
+        r = requests.get(f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={api_key}", timeout=10)
         if r.ok:
             data = r.json()
             if isinstance(data, list) and data:
@@ -375,13 +273,20 @@ def get_fmp_data(symbol, api_key):
                 result["prev_close"] = pick_first(q.get("previousClose"))
                 result["change_pct"] = pick_first(q.get("changesPercentage"))
                 result["market_cap"] = pick_first(result["market_cap"], q.get("marketCap"))
-                result["per"] = pick_first(result["per"], q.get("pe"))
-                result["fifty_two_high"] = pick_first(result["fifty_two_high"], q.get("yearHigh"))
-                result["fifty_two_low"] = pick_first(result["fifty_two_low"], q.get("yearLow"))
+                result["per"] = pick_first(q.get("pe"))
+                result["fifty_two_high"] = pick_first(q.get("yearHigh"))
+                result["fifty_two_low"] = pick_first(q.get("yearLow"))
 
+        r = requests.get(f"https://financialmodelingprep.com/api/v3/ratios-ttm/{symbol}?apikey={api_key}", timeout=10)
+        if r.ok:
+            data = r.json()
+            if isinstance(data, list) and data:
+                rr = data[0]
+                result["per"] = pick_first(result["per"], rr.get("peRatioTTM"))
+                result["pbr"] = pick_first(rr.get("priceToBookRatioTTM"))
+                result["dividend_yield"] = pick_first(rr.get("dividendYieldTTM"), rr.get("dividendYielTTM"))
     except Exception:
         pass
-
     return result
 
 # -----------------------------
@@ -390,183 +295,212 @@ def get_fmp_data(symbol, api_key):
 @st.cache_data(ttl=3600)
 def get_alpha_data(symbol, api_key):
     result = {
-        "source": "Alpha Vantage",
-        "price": None,
-        "prev_close": None,
-        "change_pct": None,
-        "market_cap": None,
-        "per": None,
-        "forward_pe": None,
-        "pbr": None,
-        "forward_pbr": None,
-        "fifty_two_high": None,
-        "fifty_two_low": None,
-        "dividend_yield": None,
-        "currency": "USD",
-        "sector": "",
-        "industry": "",
+        "price": None, "prev_close": None, "change_pct": None,
+        "market_cap": None, "per": None, "forward_pe": None, "pbr": None,
+        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
+        "currency": "USD", "company": "", "sector": "", "industry": "", "description": "",
     }
-
-    if not api_key or not symbol:
+    if not symbol or not api_key:
         return result
-
     try:
-        # GLOBAL_QUOTE
         url = "https://www.alphavantage.co/query"
-        params = {"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": api_key}
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params={"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": api_key}, timeout=10)
         if r.ok:
-            data = r.json().get("Global Quote", {})
-            result["price"] = pick_first(data.get("05. price"))
-            result["prev_close"] = pick_first(data.get("08. previous close"))
-            result["change_pct"] = pick_first(str(data.get("10. change percent", "")).replace("%", ""))
+            q = r.json().get("Global Quote", {})
+            result["price"] = pick_first(q.get("05. price"))
+            result["prev_close"] = pick_first(q.get("08. previous close"))
+            result["change_pct"] = pick_first(str(q.get("10. change percent", "")).replace("%", ""))
 
-        # OVERVIEW
-        params = {"function": "OVERVIEW", "symbol": symbol, "apikey": api_key}
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get(url, params={"function": "OVERVIEW", "symbol": symbol, "apikey": api_key}, timeout=10)
         if r.ok:
-            data = r.json()
-            result["market_cap"] = pick_first(data.get("MarketCapitalization"))
-            result["per"] = pick_first(data.get("PERatio"))
-            result["forward_pe"] = pick_first(data.get("ForwardPE"))
-            result["pbr"] = pick_first(data.get("PriceToBookRatio"))
-            result["fifty_two_high"] = pick_first(data.get("52WeekHigh"))
-            result["fifty_two_low"] = pick_first(data.get("52WeekLow"))
-            result["dividend_yield"] = pick_first(data.get("DividendYield"))
-            result["sector"] = pick_first(data.get("Sector"), "")
-            result["industry"] = pick_first(data.get("Industry"), "")
-
+            o = r.json()
+            result["company"] = pick_first(o.get("Name"), "")
+            result["sector"] = pick_first(o.get("Sector"), "")
+            result["industry"] = pick_first(o.get("Industry"), "")
+            result["description"] = pick_first(o.get("Description"), "")
+            result["market_cap"] = pick_first(o.get("MarketCapitalization"))
+            result["per"] = pick_first(o.get("PERatio"))
+            result["forward_pe"] = pick_first(o.get("ForwardPE"))
+            result["pbr"] = pick_first(o.get("PriceToBookRatio"))
+            result["fifty_two_high"] = pick_first(o.get("52WeekHigh"))
+            result["fifty_two_low"] = pick_first(o.get("52WeekLow"))
+            result["dividend_yield"] = pick_first(o.get("DividendYield"))
     except Exception:
         pass
-
     return result
 
 # -----------------------------
 # Finnhub
 # -----------------------------
-
 @st.cache_data(ttl=3600)
 def get_finnhub_data(symbol, api_key):
     result = {
-        "source": "Finnhub",
-        "price": None,
-        "prev_close": None,
-        "change_pct": None,
-        "market_cap": None,
-        "per": None,
-        "forward_pe": None,
-        "pbr": None,
-        "forward_pbr": None,
-        "fifty_two_high": None,
-        "fifty_two_low": None,
-        "dividend_yield": None,
-        "currency": "USD",
-        "sector": "",
-        "industry": "",
+        "price": None, "prev_close": None, "change_pct": None,
+        "market_cap": None, "per": None, "forward_pe": None, "pbr": None,
+        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
+        "currency": "USD", "company": "", "sector": "", "industry": "", "description": "",
     }
-
-    if not api_key or not symbol:
+    if not symbol or not api_key:
         return result
-
     try:
-        # Quote endpoint
-        url = "https://finnhub.io/api/v1/quote"
-        params = {"symbol": symbol, "token": api_key}
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get("https://finnhub.io/api/v1/quote", params={"symbol": symbol, "token": api_key}, timeout=10)
         if r.ok:
             q = r.json()
             result["price"] = pick_first(q.get("c"))
             result["prev_close"] = pick_first(q.get("pc"))
             result["change_pct"] = pick_first(q.get("dp"))
 
-        # Basic financials endpoint
-        url = "https://finnhub.io/api/v1/stock/metric"
-        params = {"symbol": symbol, "metric": "all", "token": api_key}
-        r = requests.get(url, params=params, timeout=10)
+        r = requests.get("https://finnhub.io/api/v1/stock/profile2", params={"symbol": symbol, "token": api_key}, timeout=10)
         if r.ok:
-            data = r.json()
-            m = data.get("metric", {}) if isinstance(data, dict) else {}
+            p = r.json()
+            result["company"] = pick_first(p.get("name"), "")
+            result["currency"] = pick_first(p.get("currency"), result["currency"])
+            result["industry"] = pick_first(p.get("finnhubIndustry"), "")
 
-            # FinnhubのmarketCapitalizationは多くの場合「百万ドル」単位なので、表示用にドルへ変換
+        r = requests.get("https://finnhub.io/api/v1/stock/metric", params={"symbol": symbol, "metric": "all", "token": api_key}, timeout=10)
+        if r.ok:
+            m = r.json().get("metric", {})
             mc = pick_first(m.get("marketCapitalization"))
             if mc is not None:
                 try:
                     result["market_cap"] = float(mc) * 1_000_000
                 except Exception:
                     result["market_cap"] = mc
-
-            result["per"] = pick_first(
-                m.get("peBasicExclExtraTTM"),
-                m.get("peNormalizedAnnual"),
-                m.get("peTTM")
-            )
+            result["per"] = pick_first(m.get("peBasicExclExtraTTM"), m.get("peNormalizedAnnual"), m.get("peTTM"))
             result["forward_pe"] = pick_first(m.get("forwardPE"))
-            result["pbr"] = pick_first(
-                m.get("pbAnnual"),
-                m.get("pbQuarterly")
-            )
+            result["pbr"] = pick_first(m.get("pbAnnual"), m.get("pbQuarterly"))
             result["fifty_two_high"] = pick_first(m.get("52WeekHigh"))
             result["fifty_two_low"] = pick_first(m.get("52WeekLow"))
-            result["dividend_yield"] = pick_first(
-                m.get("currentDividendYieldTTM"),
-                m.get("dividendYieldIndicatedAnnual")
-            )
-
-        # Company profile endpoint
-        url = "https://finnhub.io/api/v1/stock/profile2"
-        params = {"symbol": symbol, "token": api_key}
-        r = requests.get(url, params=params, timeout=10)
-        if r.ok:
-            p = r.json()
-            result["currency"] = pick_first(p.get("currency"), result["currency"])
-            result["industry"] = pick_first(p.get("finnhubIndustry"), "")
-
+            result["dividend_yield"] = pick_first(m.get("currentDividendYieldTTM"), m.get("dividendYieldIndicatedAnnual"))
     except Exception:
         pass
-
     return result
 
 # -----------------------------
-# 複数データ源を合成
+# データ合成
 # -----------------------------
 @st.cache_data(ttl=1800)
 def get_combined_data(yf_ticker, fmp_key, alpha_key, finnhub_key):
-    yf_data = get_yfinance_data(yf_ticker)
-
-    symbol = to_alpha_symbol(yf_ticker)
-    fmp_data = get_fmp_data(symbol, fmp_key) if symbol else {}
-    alpha_data = get_alpha_data(symbol, alpha_key) if symbol else {}
-    finnhub_data = get_finnhub_data(symbol, finnhub_key) if symbol else {}
-
-    result = {}
-    source_map = {}
+    yf_data = get_yf_data(yf_ticker)
+    symbol = to_api_symbol(yf_ticker)
+    fmp = get_fmp_data(symbol, fmp_key) if symbol else {}
+    alpha = get_alpha_data(symbol, alpha_key) if symbol else {}
+    finnhub = get_finnhub_data(symbol, finnhub_key) if symbol else {}
 
     keys = [
-        "price", "prev_close", "change_pct", "market_cap",
-        "per", "forward_pe", "pbr", "forward_pbr",
-        "fifty_two_high", "fifty_two_low", "dividend_yield",
-        "currency", "sector", "industry"
+        "price", "prev_close", "change_pct", "market_cap", "per", "forward_pe", "pbr",
+        "fifty_two_high", "fifty_two_low", "dividend_yield", "currency",
+        "company", "sector", "industry", "description"
     ]
-
-    # 優先順位は yfinance -> FMP -> Finnhub -> Alpha Vantage
+    result, source_map = {}, {}
     for k in keys:
-        candidates = [
-            ("yfinance", yf_data.get(k)),
-            ("FMP", fmp_data.get(k) if fmp_data else None),
-            ("Finnhub", finnhub_data.get(k) if finnhub_data else None),
-            ("Alpha Vantage", alpha_data.get(k) if alpha_data else None),
-        ]
-        value = None
-        src = ""
+        # 会社概要はAPI説明文が有効なことが多いので FMP/Alpha をyfinanceより優先
+        if k in ["company", "sector", "industry", "description"]:
+            candidates = [
+                ("FMP", fmp.get(k) if fmp else None),
+                ("Alpha Vantage", alpha.get(k) if alpha else None),
+                ("Finnhub", finnhub.get(k) if finnhub else None),
+                ("yfinance", yf_data.get(k)),
+            ]
+        else:
+            candidates = [
+                ("yfinance", yf_data.get(k)),
+                ("FMP", fmp.get(k) if fmp else None),
+                ("Finnhub", finnhub.get(k) if finnhub else None),
+                ("Alpha Vantage", alpha.get(k) if alpha else None),
+            ]
+        value, src = None, "未取得"
         for name, v in candidates:
             if v is not None and v != "" and not (isinstance(v, float) and pd.isna(v)):
-                value = v
-                src = name
+                value, src = v, name
                 break
         result[k] = value
-        source_map[k] = src if value is not None and value != "" else "未取得"
+        source_map[k] = src
+    return result, source_map
 
-    return result, source_map, yf_data, fmp_data, alpha_data, finnhub_data
+# -----------------------------
+# 自動AI関連メモ
+# -----------------------------
+def auto_ai_relation(category, industry, description):
+    text = f"{category} {industry} {description}".lower()
+
+    if any(k in text for k in ["semiconductor", "gpu", "chip", "memory", "electronic", "equipment"]):
+        return "半導体・GPU・メモリー・製造装置など、AI計算インフラの上流/周辺として関連候補。"
+    if any(k in text for k in ["telecom", "communication", "network", "wireless", "fiber"]):
+        return "通信ネットワーク・クラウド接続・データセンター間通信の観点でAI関連候補。"
+    if any(k in text for k in ["utility", "electric", "power", "energy", "nuclear", "gas"]):
+        return "AIデータセンターの電力需要、発電、送電、電力インフラの観点で関連候補。"
+    if any(k in text for k in ["data center", "reit", "real estate", "infrastructure"]):
+        return "AIサーバーを収容するデータセンター/インフラ需要の観点で関連候補。"
+    if any(k in text for k in ["software", "cloud", "internet", "ai", "artificial intelligence"]):
+        return "AIサービス、クラウド、ソフトウェア利用拡大の観点で関連候補。"
+    if any(k in text for k in ["machinery", "industrial", "construction", "engineering", "automation"]):
+        return "AIデータセンター建設、設備投資、産業自動化の観点で関連候補。"
+    if any(k in text for k in ["mining", "copper", "materials", "chemical", "lithium"]):
+        return "銅・素材・電池材料など、AIインフラや電力設備に必要な材料の観点で関連候補。"
+
+    return "取得した会社概要・分類からAI関連候補として仮メモを生成。詳しい関連理由は自分メモで追記。"
+
+def trim_text(text, max_len=420):
+    text = str(text or "").strip()
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "..."
+
+def build_row_from_ticker(ticker):
+    t = str(ticker).strip().upper()
+    hit = df[(df["ticker"].str.upper() == t) | (df["yf_ticker"].str.upper() == t)]
+    if not hit.empty:
+        row = hit.iloc[0].copy()
+        row["_virtual"] = False
+        return row
+
+    combined, source_map = get_combined_data(t, FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
+    company = pick_first(combined.get("company"), t)
+    category = pick_first(combined.get("sector"), "未分類")
+    industry = pick_first(combined.get("industry"), "")
+    description = trim_text(combined.get("description"), 520)
+
+    if description:
+        business = description
+    elif category or industry:
+        business = f"取得分類：{category or '未取得'} / {industry or '未取得'}"
+    else:
+        business = "会社概要は未取得です。APIキーを追加すると反映される可能性があります。"
+
+    relation = auto_ai_relation(category, industry, description)
+    keywords = f"{category} {industry} {company}"
+
+    return pd.Series({
+        "ticker": t,
+        "yf_ticker": t,
+        "company": company,
+        "category": category,
+        "business": business,
+        "ai_relation": relation,
+        "ai_score": 3,
+        "keywords": keywords,
+        "related": "",
+        "official_ir_url": "",
+        "_virtual": True,
+    })
+
+def add_favorite_stock(ticker, company, category):
+    ticker = str(ticker).upper().strip()
+    category = str(category or "未分類").strip()
+    updated = False
+    for item in st.session_state.favorite_stocks:
+        if item["ticker"].upper() == ticker:
+            item["company"] = company
+            item["category"] = category
+            updated = True
+            break
+    if not updated:
+        st.session_state.favorite_stocks.append({"ticker": ticker, "company": company, "category": category})
+
+def remove_favorite_stock(ticker):
+    ticker = str(ticker).upper().strip()
+    st.session_state.favorite_stocks = [x for x in st.session_state.favorite_stocks if x["ticker"].upper() != ticker]
 
 # -----------------------------
 # 外部リンク
@@ -577,26 +511,29 @@ def make_external_links(row):
     company = str(row["company"]).strip()
     code = jp_code(yf_ticker)
     q = quote_plus(f"{ticker} {company}")
-
     links = []
+
     links.append(("Yahoo Finance", f"https://finance.yahoo.com/quote/{yf_ticker}"))
     links.append(("TradingView", f"https://www.tradingview.com/symbols/{yf_ticker.replace('.', '-')}/"))
     links.append(("Google検索", f"https://www.google.com/search?q={q}+stock"))
 
     if code:
-        links.append(("株探", f"https://kabutan.jp/stock/?code={code}"))
-        links.append(("株探チャート", f"https://kabutan.jp/stock/chart?code={code}"))
-        links.append(("四季報オンライン", f"https://shikiho.toyokeizai.net/stocks/{code}"))
-        links.append(("バフェットコード", f"https://www.buffett-code.com/company/{code}/"))
-        links.append(("バフェットコード財務", f"https://www.buffett-code.com/company/{code}/financial"))
-        links.append(("IR BANK", f"https://irbank.net/{code}"))
+        links += [
+            ("株探", f"https://kabutan.jp/stock/?code={code}"),
+            ("株探チャート", f"https://kabutan.jp/stock/chart?code={code}"),
+            ("四季報オンライン", f"https://shikiho.toyokeizai.net/stocks/{code}"),
+            ("バフェットコード", f"https://www.buffett-code.com/company/{code}/"),
+            ("IR BANK", f"https://irbank.net/{code}"),
+        ]
     else:
-        links.append(("株探で検索", f"https://www.google.com/search?q={quote_plus(ticker + ' 株探')}"))
-        links.append(("四季報で検索", f"https://www.google.com/search?q={quote_plus(ticker + ' 四季報')}"))
-        links.append(("バフェットコードで検索", f"https://www.google.com/search?q={quote_plus(ticker + ' バフェットコード')}"))
+        links += [
+            ("株探で検索", f"https://www.google.com/search?q={quote_plus(ticker + ' 株探')}"),
+            ("四季報で検索", f"https://www.google.com/search?q={quote_plus(ticker + ' 四季報')}"),
+            ("バフェットコードで検索", f"https://www.google.com/search?q={quote_plus(ticker + ' バフェットコード')}"),
+        ]
 
     if str(row.get("official_ir_url", "")).strip():
-        links.append(("公式IR", str(row["official_ir_url"]).strip()))
+        links.append(("公式IR", str(row.get("official_ir_url")).strip()))
     else:
         links.append(("公式IRを検索", f"https://www.google.com/search?q={quote_plus(company + ' investor relations IR')}"))
 
@@ -616,69 +553,20 @@ st.markdown(
     .badge {display:inline-block;background:rgba(255,255,255,.14);color:white;padding:7px 11px;border-radius:999px;margin:4px 6px 4px 0;font-size:13px;border:1px solid rgba(255,255,255,.18);}
     .notice {background:#fff7d6;border-left:5px solid #f59e0b;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
     .safe {background:#ecfdf5;border-left:5px solid #10b981;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
-    .risk {background:#fff1f2;border-left:5px solid #e11d48;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
-    .stMetric {background:#fff;border:1px solid #e5e7eb;padding:12px;border-radius:16px;box-shadow:0 3px 14px rgba(0,0,0,.04);}
-    .metric-card {
-        background:#fff;
-        border:1px solid #e5e7eb;
-        border-radius:16px;
-        padding:12px 14px;
-        min-height:96px;
-        box-shadow:0 3px 14px rgba(0,0,0,.04);
-        overflow:hidden;
-        margin-bottom:10px;
-    }
-    .metric-label2 {
-        color:#64748b;
-        font-size:13px;
-        font-weight:800;
-        margin-bottom:6px;
-        white-space:nowrap;
-    }
-    .metric-value2 {
-        color:#111827;
-        font-size:clamp(20px, 2.8vw, 32px);
-        font-weight:850;
-        line-height:1.05;
-        white-space:nowrap;
-        overflow:hidden;
-        text-overflow:ellipsis;
-    }
-    .metric-sub {
-        color:#64748b;
-        font-size:12px;
-        font-weight:700;
-        margin-top:6px;
-        white-space:nowrap;
-        overflow:hidden;
-        text-overflow:ellipsis;
-    }
-    .profile-grid {
-        background:#f8fafc;
-        border:1px solid #e5e7eb;
-        border-radius:16px;
-        padding:12px 14px;
-        margin-top:10px;
-        margin-bottom:10px;
-    }
-    .profile-title {
-        font-weight:900;
-        color:#111827;
-        margin-bottom:6px;
-    }
-    .profile-row {
-        color:#334155;
-        font-size:14px;
-        line-height:1.6;
-    }
-
+    .metric-card {background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:12px 14px;min-height:96px;box-shadow:0 3px 14px rgba(0,0,0,.04);overflow:hidden;margin-bottom:10px;}
+    .metric-label2 {color:#64748b;font-size:13px;font-weight:800;margin-bottom:6px;white-space:nowrap;}
+    .metric-value2 {color:#111827;font-size:clamp(20px,2.8vw,32px);font-weight:850;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .metric-sub {color:#64748b;font-size:12px;font-weight:700;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .profile-grid {background:#f8fafc;border:1px solid #e5e7eb;border-radius:16px;padding:12px 14px;margin-top:10px;margin-bottom:10px;color:#111827;}
+    .profile-title {font-weight:900;color:#111827;margin-bottom:6px;}
+    .profile-row {color:#334155;font-size:14px;line-height:1.6;}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
 # -----------------------------
-# 関連図
+# AI関連図
 # -----------------------------
 def make_mindmap_html(selected_ticker=None):
     base_categories = [
@@ -694,286 +582,52 @@ def make_mindmap_html(selected_ticker=None):
         ("日本AI関連", ["7203.T", "9984.T", "6857.T"]),
     ]
 
-    # お気に入り登録された銘柄を、選択カテゴリへ追加
     category_map = {cat: list(tickers) for cat, tickers in base_categories}
-    favorite_lookup = {}
-
-    for item in st.session_state.get("favorite_stocks", []):
+    fav_names = {}
+    for item in st.session_state.favorite_stocks:
         cat = item.get("category", "未分類") or "未分類"
         ticker = item.get("ticker", "").upper()
-        company = item.get("company", "")
-        if not ticker:
-            continue
+        fav_names[ticker] = item.get("company", "")
         if cat not in category_map:
             category_map[cat] = []
-        if ticker not in category_map[cat]:
+        if ticker and ticker not in category_map[cat]:
             category_map[cat].append(ticker)
-        favorite_lookup[ticker] = company
 
     selected = selected_ticker.upper() if selected_ticker else ""
     blocks = []
-
     for cat, tickers in category_map.items():
         items = []
         for t in tickers:
             hit = df[(df["ticker"] == t) | (df["yf_ticker"] == t)]
-            if len(hit):
-                row = hit.iloc[0]
-                display_ticker = row["ticker"]
-                name = row["company"]
+            if not hit.empty:
+                name = hit.iloc[0]["company"]
+                display = hit.iloc[0]["ticker"]
             else:
-                display_ticker = t
-                name = favorite_lookup.get(t, "")
+                name = fav_names.get(t, "")
+                display = t
+            active = " active" if selected in [display.upper(), t.upper()] else ""
+            items.append(f'<div class="node stock{active}">{display}<br><small>{name}</small></div>')
+        blocks.append(f"<div class='branch'><div class='node category'>{cat}</div><div class='stocks'>{''.join(items)}</div></div>")
 
-            active = " active" if selected in [display_ticker.upper(), t.upper()] else ""
-            items.append(f'<div class="node stock{active}">{display_ticker}<br><small>{name}</small></div>')
-
-        blocks.append(
-            f"<div class='branch'><div class='node category'>{cat}</div><div class='stocks'>{''.join(items)}</div></div>"
-        )
-
-    html = f"""
+    return f"""
     <html><head><style>
     body {{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;margin:0;padding:10px;overflow-x:hidden;}}
-    .map {{
-        display:flex;
-        flex-direction:column;
-        gap:14px;
-        align-items:center;
-        overflow-x:hidden;
-        overflow-y:visible;
-        padding:12px;
-        border:1px solid #e5e7eb;
-        border-radius:18px;
-        background:white;
-        box-sizing:border-box;
-        width:100%;
-        max-width:100%;
-    }}
-    .center {{
-        width:100%;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:4px 0 8px 0;
-        position:sticky;
-        top:0;
-        background:white;
-        z-index:5;
-        border-bottom:1px solid #f1f5f9;
-    }}
-    .ai {{
-        width:92px;
-        height:92px;
-        border-radius:24px;
-        background:#111827;
-        color:white;
-        font-size:38px;
-        font-weight:900;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        box-shadow:0 8px 22px rgba(0,0,0,.18);
-    }}
-    .branches {{
-        display:grid;
-        grid-template-columns:repeat(3, 1fr);
-        gap:12px;
-        width:100%;
-        max-width:100%;
-        box-sizing:border-box;
-    }}
-    .branch {{
-        border:1px solid #e5e7eb;
-        border-radius:16px;
-        padding:10px;
-        background:#fff;
-        min-width:0;
-        box-sizing:border-box;
-    }}
+    .map {{display:flex;flex-direction:column;gap:14px;align-items:center;overflow-x:hidden;padding:12px;border:1px solid #e5e7eb;border-radius:18px;background:white;box-sizing:border-box;width:100%;max-width:100%;}}
+    .center {{width:100%;display:flex;align-items:center;justify-content:center;padding:4px 0 8px 0;position:sticky;top:0;background:white;z-index:5;border-bottom:1px solid #f1f5f9;}}
+    .ai {{width:92px;height:92px;border-radius:24px;background:#111827;color:white;font-size:38px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 22px rgba(0,0,0,.18);}}
+    .branches {{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;width:100%;max-width:100%;box-sizing:border-box;}}
+    .branch {{border:1px solid #e5e7eb;border-radius:16px;padding:10px;background:#fff;min-width:0;box-sizing:border-box;}}
     .node.category {{font-weight:900;font-size:18px;border-bottom:3px solid #ff7ab6;display:inline-block;margin-bottom:8px;}}
     .stocks {{display:flex;flex-wrap:wrap;gap:8px;}}
-    .node.stock {{
-        border:1px solid #d1d5db;
-        border-radius:12px;
-        padding:8px 10px;
-        min-width:0;
-        width:calc(50% - 4px);
-        box-sizing:border-box;
-        background:#f9fafb;
-        font-weight:900;
-        line-height:1.15;
-        overflow:hidden;
-        text-overflow:ellipsis;
-    }}
-    .node.stock small {{
-        display:block;
-        font-weight:500;
-        color:#555;
-        font-size:11px;
-        white-space:nowrap;
-        overflow:hidden;
-        text-overflow:ellipsis;
-    }}
+    .node.stock {{border:1px solid #d1d5db;border-radius:12px;padding:8px 10px;width:calc(50% - 4px);box-sizing:border-box;background:#f9fafb;font-weight:900;line-height:1.15;overflow:hidden;text-overflow:ellipsis;}}
+    .node.stock small {{display:block;font-weight:500;color:#555;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
     .node.stock.active {{background:#fff7d6;border:3px solid #f59e0b;transform:scale(1.01);}}
-    @media (max-width: 760px) {{
-        .branches {{grid-template-columns:1fr;}}
-        .node.stock {{width:100%;}}
-        .ai {{width:82px;height:82px;font-size:34px;}}
-    }}
+    @media (max-width:760px) {{.branches {{grid-template-columns:1fr;}} .node.stock {{width:100%;}} .ai {{width:82px;height:82px;font-size:34px;}}}}
     </style></head><body>
     <div class="map"><div class="center"><div class="ai">AI</div></div><div class="branches">{''.join(blocks)}</div></div>
     </body></html>
     """
-    return html
 
-
-def make_virtual_row(ticker):
-    """
-    stocks.csvに未登録の銘柄でも表示できるようにする仮データ。
-    会社名や分類はAPI取得後に一部補完される。
-    """
-    t = str(ticker).strip().upper()
-    company = t
-    category = "未分類"
-    business = "この銘柄はまだstocks.csvに登録されていません。株価データと外部リンクのみ表示します。"
-    ai_relation = "AI関連度・カテゴリ・関連銘柄は未登録です。必要ならstocks.csvに追加してください。"
-    ai_score = 0
-    keywords = "未登録"
-    related = ""
-    official_ir_url = ""
-
-    try:
-        yf_data = get_yfinance_data(t)
-        if yf_data.get("sector") or yf_data.get("industry"):
-            category = yf_data.get("sector") or "未分類"
-            business = f'Yahoo Finance分類：{yf_data.get("sector", "")} / {yf_data.get("industry", "")}'
-        # yfinanceのinfoは重いので、ここでは最小限
-        try:
-            info = yf.Ticker(t).info or {}
-            company = info.get("longName") or info.get("shortName") or t
-            if info.get("sector") or info.get("industry"):
-                category = info.get("sector") or category
-                business = f'Yahoo Finance分類：{info.get("sector", "")} / {info.get("industry", "")}'
-        except Exception:
-            pass
-    except Exception:
-        pass
-
-    return pd.Series({
-        "ticker": t,
-        "yf_ticker": t,
-        "company": company,
-        "category": category,
-        "business": business,
-        "ai_relation": ai_relation,
-        "ai_score": ai_score,
-        "keywords": keywords,
-        "related": related,
-        "official_ir_url": official_ir_url,
-        "_virtual": True,
-    })
-
-def auto_ai_relation_from_category(category, industry):
-    text = f"{category} {industry}".lower()
-
-    if any(k in text for k in ["semiconductor", "chip", "electronic", "technology"]):
-        return "半導体・電子部品・AIインフラの観点で関連候補。詳細は後で自分メモに追記。"
-    if any(k in text for k in ["telecom", "communication", "network", "wireless"]):
-        return "通信インフラ・クラウド接続・データセンター通信の観点でAI関連候補。"
-    if any(k in text for k in ["utility", "electric", "energy", "power"]):
-        return "AIデータセンターの電力需要・送電・発電インフラの観点で関連候補。"
-    if any(k in text for k in ["real estate", "reit", "data center"]):
-        return "データセンター・施設インフラの観点でAI関連候補。"
-    if any(k in text for k in ["software", "cloud", "internet", "services"]):
-        return "ソフトウェア・クラウド・AIサービス利用拡大の観点で関連候補。"
-    if any(k in text for k in ["industrial", "machinery", "engineering", "construction"]):
-        return "設備投資・インフラ・製造装置の観点でAI関連候補。"
-    if any(k in text for k in ["materials", "mining", "copper", "chemical"]):
-        return "素材・資源・電線・設備材料の観点でAIインフラ関連候補。"
-
-    return "取得分類からAI関連候補として仮登録。詳しい関連理由は後で自分メモに追記。"
-
-def show_add_to_db_hint(row, display_category=None, display_industry=None, display_business=None):
-    if bool(row.get("_virtual", False)):
-        auto_category = display_category or row.get("category", "未分類") or "未分類"
-        auto_industry = display_industry or ""
-        auto_business = display_business or row.get("business", "")
-        auto_relation = auto_ai_relation_from_category(auto_category, auto_industry)
-        auto_keywords = f"{auto_category} {auto_industry} {row.get('company','')}"
-
-        st.markdown(
-            """
-            <div class="notice">
-            <b>この銘柄はまだAI関連株DBには未登録です。</b><br>
-            外部データから取得できた情報を下に自動反映しました。<br>
-            必要ならカテゴリを変えて、AI関連図へ一時登録できます。
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown("### 🧩 自動取得から作った仮登録データ")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write("**会社名**")
-            st.write(row.get("company", "未取得"))
-            st.write("**分類 / セクター**")
-            st.write(auto_category or "未取得")
-        with c2:
-            st.write("**業種**")
-            st.write(auto_industry or "未取得")
-            st.write("**AIとの仮関連メモ**")
-            st.write(auto_relation)
-
-        st.markdown("### 📌 AI関連図へ登録")
-        default_categories = sorted(set(
-            df["category"].dropna().astype(str).tolist()
-            + [x.get("category", "") for x in st.session_state.get("favorite_stocks", [])]
-            + ["GPU", "メモリー", "冷却", "電力", "原子力", "光通信", "データセンター", "半導体製造装置", "素材", "日本AI関連", "IT・通信", "未分類"]
-            + ([auto_category] if auto_category else [])
-        ))
-
-        default_index = 0
-        if auto_category in default_categories:
-            default_index = default_categories.index(auto_category)
-
-        cc1, cc2, cc3 = st.columns([2, 2, 1])
-        with cc1:
-            selected_category = st.selectbox(
-                "登録カテゴリ",
-                default_categories,
-                index=default_index,
-                key=f"auto_cat_{row['ticker']}",
-            )
-        with cc2:
-            custom_category = st.text_input(
-                "新カテゴリ名",
-                value="",
-                key=f"auto_custom_cat_{row['ticker']}",
-                placeholder="例：AI通信・クラウド",
-            )
-        with cc3:
-            ai_score = st.selectbox(
-                "AI関連度",
-                [1, 2, 3, 4, 5],
-                index=2,
-                key=f"auto_score_{row['ticker']}",
-            )
-
-        final_category = custom_category.strip() if custom_category.strip() else selected_category
-
-        if st.button("この取得情報でAI関連図に登録", key=f"auto_register_{row['ticker']}", use_container_width=True):
-            add_favorite_stock(row["ticker"], row["company"], final_category)
-            st.success(f'{row["ticker"]} を「{final_category}」に登録しました。左メニューの「AI関連図」で確認できます。')
-
-        st.markdown("### 📋 stocks.csvに追加する行")
-        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},{final_category},{auto_business},{auto_relation},{ai_score},{auto_keywords},"",'
-        st.code(sample, language="csv")
-
-# -----------------------------
-# 表示
-# -----------------------------
 period_map = {"1ヶ月": "1mo", "3ヶ月": "3mo", "6ヶ月": "6mo", "1年": "1y", "5年": "5y"}
 
 def show_external_links(row):
@@ -987,86 +641,64 @@ def show_external_links(row):
         """,
         unsafe_allow_html=True,
     )
-    links = make_external_links(row)
     cols = st.columns(3)
-    for i, (label, url) in enumerate(links):
+    for i, (label, url) in enumerate(make_external_links(row)):
         with cols[i % 3]:
             st.link_button(label, url, use_container_width=True)
 
 def show_source_table(source_map):
-    st.caption("各項目の取得元")
-    rows = []
-    for label, key in [
-        ("株価", "price"),
-        ("前日終値", "prev_close"),
-        ("前日比", "change_pct"),
-        ("時価総額", "market_cap"),
-        ("PER", "per"),
-        ("予想PER", "forward_pe"),
-        ("PBR", "pbr"),
-        ("予想PBR", "forward_pbr"),
-        ("52週高値", "fifty_two_high"),
-        ("52週安値", "fifty_two_low"),
-        ("配当利回り", "dividend_yield"),
-    ]:
-        rows.append({"項目": label, "取得元": source_map.get(key, "未取得")})
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    labels = [
+        ("会社名", "company"), ("分類", "sector"), ("業種", "industry"), ("事業内容", "description"),
+        ("株価", "price"), ("前日終値", "prev_close"), ("前日比", "change_pct"),
+        ("時価総額", "market_cap"), ("PER", "per"), ("予想PER", "forward_pe"), ("PBR", "pbr"),
+        ("52週高値", "fifty_two_high"), ("52週安値", "fifty_two_low"), ("配当利回り", "dividend_yield"),
+    ]
+    st.dataframe(
+        pd.DataFrame([{"項目": label, "取得元": source_map.get(key, "未取得")} for label, key in labels]),
+        use_container_width=True,
+        hide_index=True,
+    )
 
-
-def show_favorite_register(row, display_category):
-    st.subheader("⭐ AI関連図にお気に入り登録")
-
-    default_categories = sorted(set(
+def show_register_box(row):
+    categories = sorted(set(
         df["category"].dropna().astype(str).tolist()
-        + [x.get("category", "") for x in st.session_state.get("favorite_stocks", [])]
+        + [x["category"] for x in st.session_state.favorite_stocks]
         + ["GPU", "メモリー", "冷却", "電力", "原子力", "光通信", "データセンター", "半導体製造装置", "素材", "日本AI関連", "未分類"]
+        + [row["category"]]
     ))
+    default_index = categories.index(row["category"]) if row["category"] in categories else 0
 
-    default_index = 0
-    if display_category in default_categories:
-        default_index = default_categories.index(display_category)
-
-    c1, c2 = st.columns([2, 1])
+    st.subheader("⭐ AI関連図に登録")
+    c1, c2 = st.columns([2, 2])
     with c1:
-        selected_category = st.selectbox(
-            "登録するカテゴリ",
-            default_categories,
-            index=default_index,
-            key=f"fav_cat_{row['ticker']}",
-        )
+        selected = st.selectbox("登録カテゴリ", categories, index=default_index, key=f"reg_cat_{row['ticker']}")
     with c2:
-        custom_category = st.text_input(
-            "新カテゴリを作る場合",
-            value="",
-            key=f"fav_custom_{row['ticker']}",
-            placeholder="例：AI通信・クラウド",
-        )
+        custom = st.text_input("新カテゴリ名", value="", key=f"reg_custom_{row['ticker']}", placeholder="例：AI通信・クラウド")
+    final_cat = custom.strip() if custom.strip() else selected
 
-    final_category = custom_category.strip() if custom_category.strip() else selected_category
+    if st.button("この銘柄をAI関連図に登録", key=f"reg_btn_{row['ticker']}", use_container_width=True):
+        add_favorite_stock(row["ticker"], row["company"], final_cat)
+        st.success(f'{row["ticker"]} を「{final_cat}」に登録しました。左メニューの「AI関連図」で確認できます。')
 
-    b1, b2 = st.columns([1, 1])
-    with b1:
-        if st.button("この銘柄をAI関連図に登録", key=f"fav_add_{row['ticker']}", use_container_width=True):
-            add_favorite_stock(row["ticker"], row["company"], final_category)
-            st.success(f'{row["ticker"]} を「{final_category}」に登録しました。左メニューの「AI関連図」で確認できます。')
-    with b2:
-        if st.button("この銘柄を登録解除", key=f"fav_remove_{row['ticker']}", use_container_width=True):
-            remove_favorite_stock(row["ticker"])
-            st.info(f'{row["ticker"]} をお気に入りから解除しました。')
-
-    st.caption("※ 現在のお気に入り登録はセッション内保存です。サイトを再起動すると消える場合があります。永続保存は次段階で追加できます。")
+    if bool(row.get("_virtual", False)):
+        st.markdown("### 📋 stocks.csvに追加する行")
+        sample = f'{row["ticker"]},{row["yf_ticker"]},{row["company"]},{final_cat},{row["business"]},{row["ai_relation"]},{row["ai_score"]},{row["keywords"]},"",'
+        st.code(sample, language="csv")
 
 def show_stock_page(row):
-    combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
+    combined, source_map = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
 
-    # 未登録銘柄でも、取得できた分類を優先して表示
-    display_category = row.get("category", "未分類")
-    if bool(row.get("_virtual", False)) and combined.get("sector"):
-        display_category = combined.get("sector")
-    display_industry = combined.get("industry", "")
+    display_category = row.get("category", "未分類") or "未分類"
+    display_industry = combined.get("industry") or ""
     display_business = row.get("business", "")
-    if bool(row.get("_virtual", False)) and (combined.get("sector") or combined.get("industry")):
-        display_business = f"取得分類：{combined.get('sector','')} / {combined.get('industry','')}"
+    display_relation = row.get("ai_relation", "")
+
+    # 未登録銘柄の場合は、API取得情報を優先
+    if bool(row.get("_virtual", False)):
+        display_category = combined.get("sector") or row.get("category", "未分類")
+        display_industry = combined.get("industry") or ""
+        display_business = trim_text(combined.get("description") or row.get("business", ""), 520)
+        display_relation = auto_ai_relation(display_category, display_industry, display_business)
 
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
     col1, col2 = st.columns([1.1, 2])
@@ -1080,7 +712,7 @@ def show_stock_page(row):
         st.write("**何を作るか / 事業内容**")
         st.write(display_business)
         st.write("**AIとのつながり**")
-        st.write(row["ai_relation"])
+        st.write(display_relation)
         st.markdown(
             f"""
             <div class="profile-grid">
@@ -1093,58 +725,45 @@ def show_stock_page(row):
         )
     st.markdown("</div>", unsafe_allow_html=True)
 
-    show_add_to_db_hint(row, display_category, display_industry, display_business)
+    if bool(row.get("_virtual", False)):
+        st.markdown(
+            """
+            <div class="notice">
+            <b>未登録銘柄です。</b><br>
+            無料API/yfinanceから取得できた会社名・分類・業種・事業内容を自動反映しています。
+            APIキーを追加すると、より詳細な情報が出やすくなります。
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    try:
-        show_external_links(row)
-    except Exception as e:
-        st.warning(f"外部リンク表示をスキップしました：{e}")
+    show_external_links(row)
+    show_register_box(row)
 
-    # 未登録銘柄は show_add_to_db_hint 内で仮登録欄を出すので、
-    # 通常のお気に入り登録欄は登録済み銘柄だけ表示する。
-    if not bool(row.get("_virtual", False)):
-        show_favorite_register(row, display_category)
-
-    st.subheader("📊 自動取得データ：複数ソース補完")
+    st.subheader("📊 自動取得データ")
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
         st.markdown(
             """
             <div class="notice">
             現在は <b>yfinanceのみ</b> で取得しています。<br>
-            FMP_API_KEY / ALPHAVANTAGE_API_KEY / FINNHUB_API_KEY を Streamlit Secrets に入れると、PER/PBR/時価総額の補完ができます。
+            FMP_API_KEY / ALPHAVANTAGE_API_KEY / FINNHUB_API_KEY を Secrets に入れると、会社概要・PER/PBR/時価総額の補完ができます。
             </div>
             """,
             unsafe_allow_html=True,
         )
     else:
         active = []
-        if FMP_API_KEY:
-            active.append("FMP")
-        if ALPHAVANTAGE_API_KEY:
-            active.append("Alpha Vantage")
-        if FINNHUB_API_KEY:
-            active.append("Finnhub")
-        st.markdown(
-            f"""
-            <div class="safe">
-            補助APIが有効です：<b>{", ".join(active)}</b><br>
-            yfinanceで取れない項目をAPIで補完します。
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        if FMP_API_KEY: active.append("FMP")
+        if FINNHUB_API_KEY: active.append("Finnhub")
+        if ALPHAVANTAGE_API_KEY: active.append("Alpha Vantage")
+        st.markdown(f'<div class="safe">補助APIが有効です：<b>{", ".join(active)}</b></div>', unsafe_allow_html=True)
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        metric_card("株価", fmt_price(combined["price"], combined["currency"]), delta_text(combined["change_pct"]))
-    with c2:
-        metric_card("時価総額", fmt_market_cap(combined["market_cap"]), f'取得元：{source_map.get("market_cap", "未取得")}')
-    with c3:
-        metric_card("PER", fmt_num(combined["per"]), f'取得元：{source_map.get("per", "未取得")}')
-    with c4:
-        metric_card("予想PER", fmt_num(combined["forward_pe"]), f'取得元：{source_map.get("forward_pe", "未取得")}')
-    with c5:
-        metric_card("PBR", fmt_num(combined["pbr"]), f'取得元：{source_map.get("pbr", "未取得")}')
+    with c1: metric_card("株価", fmt_price(combined["price"], combined["currency"]), delta_text(combined["change_pct"]))
+    with c2: metric_card("時価総額", fmt_market_cap(combined["market_cap"]), f'取得元：{source_map.get("market_cap")}')
+    with c3: metric_card("PER", fmt_num(combined["per"]), f'取得元：{source_map.get("per")}')
+    with c4: metric_card("予想PER", fmt_num(combined["forward_pe"]), f'取得元：{source_map.get("forward_pe")}')
+    with c5: metric_card("PBR", fmt_num(combined["pbr"]), f'取得元：{source_map.get("pbr")}')
 
     dy = None
     if combined["dividend_yield"] is not None:
@@ -1154,89 +773,45 @@ def show_stock_page(row):
             dy = combined["dividend_yield"]
 
     c6, c7, c8, c9 = st.columns(4)
-    with c6:
-        metric_card("前日終値", fmt_price(combined["prev_close"], combined["currency"]), f'取得元：{source_map.get("prev_close", "未取得")}')
-    with c7:
-        metric_card("52週高値", fmt_price(combined["fifty_two_high"], combined["currency"]), f'取得元：{source_map.get("fifty_two_high", "未取得")}')
-    with c8:
-        metric_card("52週安値", fmt_price(combined["fifty_two_low"], combined["currency"]), f'取得元：{source_map.get("fifty_two_low", "未取得")}')
-    with c9:
-        metric_card("配当利回り", fmt_percent(dy), f'取得元：{source_map.get("dividend_yield", "未取得")}')
-
-    c10, c11 = st.columns(2)
-    with c10:
-        metric_card("予想PBR", fmt_num(combined["forward_pbr"]), "無料APIでは未取得になりやすい")
-    with c11:
-        metric_card("データ取得コード", row["yf_ticker"], "yfinance / API用コード")
+    with c6: metric_card("前日終値", fmt_price(combined["prev_close"], combined["currency"]), f'取得元：{source_map.get("prev_close")}')
+    with c7: metric_card("52週高値", fmt_price(combined["fifty_two_high"], combined["currency"]), f'取得元：{source_map.get("fifty_two_high")}')
+    with c8: metric_card("52週安値", fmt_price(combined["fifty_two_low"], combined["currency"]), f'取得元：{source_map.get("fifty_two_low")}')
+    with c9: metric_card("配当利回り", fmt_percent(dy), f'取得元：{source_map.get("dividend_yield")}')
 
     with st.expander("📌 取得元を確認する"):
-        try:
-            show_source_table(source_map)
-        except Exception as e:
-            st.warning(f"取得元表示をスキップしました：{e}")
+        show_source_table(source_map)
 
-    st.caption("※ 自動取得データは参考値です。無料APIやyfinanceは欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
+    st.caption("※ 自動取得データは参考値です。無料API/yfinanceは欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
 
     st.subheader("📈 株価チャート")
-    try:
-        hist = get_yf_history(row["yf_ticker"], period_map.get(period_label, "6mo"))
-        if hist.empty:
-            st.warning("チャートデータを取得できませんでした。")
-        else:
-            date_col = "Date" if "Date" in hist.columns else hist.columns[0]
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
-            fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
-            st.plotly_chart(fig, use_container_width=True)
-    except Exception as e:
-        st.warning(f"チャート表示をスキップしました：{e}")
-
-    st.subheader("🔗 関連銘柄")
-    related = [x.strip().upper() for x in str(row["related"]).split(",") if x.strip()]
-    related_df = df[df["ticker"].isin(related) | df["yf_ticker"].isin(related)]
-    if related_df.empty:
-        st.info("関連銘柄はまだ登録されていません。")
+    hist = get_yf_history(row["yf_ticker"], period_map[period_label])
+    if hist.empty:
+        st.warning("チャートデータを取得できませんでした。")
     else:
-        st.dataframe(
-            related_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]],
-            use_container_width=True,
-            hide_index=True,
-        )
+        date_col = "Date" if "Date" in hist.columns else hist.columns[0]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=hist[date_col], y=hist["Close"], mode="lines", name="Close"))
+        fig.update_layout(height=380, margin=dict(l=20, r=20, t=30, b=20), hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v14</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">登録欄の重複を修正し、最後に入力したティッカーを保持する版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v15</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">未登録ティッカーでも、無料API/yfinanceから会社名・分類・業種・事業内容・AI仮関連メモを自動反映します。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
 period_label = st.sidebar.selectbox("チャート期間", ["1ヶ月", "3ヶ月", "6ヶ月", "1年", "5年"], index=2)
 st.sidebar.markdown("---")
+st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / D / T")
 st.sidebar.caption("日本株例：7203.T / 9984.T / 6857.T")
-st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / T")
-st.sidebar.caption("AI関連図は左メニューから確認できます。")
 
 if mode == "ティッカー検索":
-    ticker_input = st.text_input(
-        "ティッカーコードを入力",
-        value=st.session_state.get("last_ticker", "NVDA"),
-        key="ticker_search_input",
-    )
-    ticker = ticker_input.strip().upper()
-
-    if ticker:
-        st.session_state.last_ticker = ticker
-
-    hit = df[(df["ticker"] == ticker) | (df["yf_ticker"] == ticker)]
-
-    if hit.empty:
-        virtual_row = make_virtual_row(ticker)
-        show_stock_page(virtual_row)
-    else:
-        row = hit.iloc[0].copy()
-        row["_virtual"] = False
-        show_stock_page(row)
+    st.text_input("ティッカーコードを入力", key="ticker_search_input", on_change=sync_ticker_input)
+    ticker = st.session_state.get("last_ticker", "NVDA").strip().upper()
+    row = build_row_from_ticker(ticker)
+    show_stock_page(row)
 
 elif mode == "キーワード検索":
     keyword = st.text_input("キーワードを入力", value="冷却").strip()
@@ -1253,7 +828,7 @@ elif mode == "キーワード検索":
         result = df[mask]
         st.subheader(f"検索結果：{keyword}")
         if result.empty:
-            st.warning("該当する銘柄がありません。")
+            st.warning("該当する登録済み銘柄がありません。")
         else:
             st.dataframe(result[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
 
@@ -1265,27 +840,17 @@ elif mode == "カテゴリ表示":
 
 elif mode == "AI関連図":
     st.subheader("🗺 AI関連図")
-    st.markdown(
-        """
-        <div class="notice">
-        検索した銘柄を「AI関連図にお気に入り登録」すると、ここで選んだカテゴリの中に追加表示されます。<br>
-        現在はセッション内保存です。永続保存したい場合は、次にGoogle SheetsやSupabase連携を追加します。
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     components.html(make_mindmap_html(), height=980, scrolling=False)
-
-    st.subheader("⭐ お気に入り登録済み銘柄")
-    fav_df = favorite_dataframe()
+    st.subheader("⭐ 登録済みお気に入り")
+    fav_df = pd.DataFrame(st.session_state.favorite_stocks)
     if fav_df.empty:
-        st.info("まだお気に入り登録された銘柄はありません。ティッカー検索から登録してください。")
+        st.info("まだ登録された銘柄はありません。ティッカー検索から登録できます。")
     else:
         st.dataframe(fav_df, use_container_width=True, hide_index=True)
-        remove_target = st.selectbox("解除する銘柄を選択", fav_df["ticker"].tolist())
+        target = st.selectbox("解除する銘柄", fav_df["ticker"].tolist())
         if st.button("選択した銘柄を解除", use_container_width=True):
-            remove_favorite_stock(remove_target)
-            st.success(f"{remove_target} を解除しました。画面を再読み込みすると反映されます。")
+            remove_favorite_stock(target)
+            st.success(f"{target} を解除しました。")
 
 elif mode == "全銘柄一覧":
     st.subheader("登録銘柄一覧")
@@ -1294,32 +859,39 @@ elif mode == "全銘柄一覧":
 elif mode == "API設定確認":
     st.subheader("API設定確認")
     st.write("FMP_API_KEY:", "設定済み" if FMP_API_KEY else "未設定")
-    st.write("ALPHAVANTAGE_API_KEY:", "設定済み" if ALPHAVANTAGE_API_KEY else "未設定")
     st.write("FINNHUB_API_KEY:", "設定済み" if FINNHUB_API_KEY else "未設定")
-    st.markdown("""
-    ### Streamlit Cloudで設定する場所
-    App管理画面 → Settings → Secrets
+    st.write("ALPHAVANTAGE_API_KEY:", "設定済み" if ALPHAVANTAGE_API_KEY else "未設定")
+    st.markdown(
+        """
+        ### Streamlit Cloudで設定する場所
+        App管理画面 → Settings → Secrets
 
-    ### 入れる内容の例
-    ```toml
-    FMP_API_KEY = "ここにFMPのAPIキー"
-    ALPHAVANTAGE_API_KEY = "ここにAlpha VantageのAPIキー"
-    FINNHUB_API_KEY = "ここにFinnhubのAPIキー"
-    ```
+        ```toml
+        FMP_API_KEY = "ここにFMPのAPIキー"
+        FINNHUB_API_KEY = "ここにFinnhubのAPIキー"
+        ALPHAVANTAGE_API_KEY = "ここにAlpha VantageのAPIキー"
+        ```
 
-    片方だけでもOKです。
-    """)
+        会社概要・業種・事業内容は、APIキーを入れるほど出やすくなります。
+        """
+    )
 
 st.markdown("---")
 with st.expander("🛠 銘柄データの追加・修正方法"):
-    st.markdown("""
-    `stocks.csv` に1行追加します。
+    st.markdown(
+        """
+        `stocks.csv` に1行追加します。
 
-    大事な列：
-    - `ticker`：表示用ティッカー
-    - `yf_ticker`：yfinance取得用コード。日本株は例：`7203.T`
-    - `official_ir_url`：公式IRページURL。空欄でもOK
-    - `related`：関連銘柄。カンマ区切り
-
-    未登録ティッカーも検索できますが、AI分類・関連銘柄・関連図に入れるには stocks.csv に追加してください。無料APIは制限があるので、取得できない項目は「未取得」になります。
-    """)
+        大事な列：
+        - `ticker`：表示用ティッカー
+        - `yf_ticker`：yfinance取得用コード。日本株は例：`7203.T`
+        - `company`：会社名
+        - `category`：分類
+        - `business`：事業内容
+        - `ai_relation`：AIとのつながり
+        - `ai_score`：1〜5
+        - `keywords`：検索用キーワード
+        - `related`：関連銘柄。カンマ区切り
+        - `official_ir_url`：公式IRページ
+        """
+    )

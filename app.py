@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v17", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v18", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v17 Clean
+# AI関連株コード辞典 v18 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -728,6 +728,39 @@ st.markdown(
     .small-label {color:#cbd5e1;font-size:13px;font-weight:800;margin-top:6px;margin-bottom:2px;}
     .hero-company-main {font-size:34px;font-weight:900;line-height:1.05;color:white;margin-bottom:14px;word-break:break-word;}
     .hero-ticker-code {font-size:42px;font-weight:900;line-height:1.0;color:white;margin-bottom:12px;}
+
+    .identity-box {
+        background: rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.22);
+        border-radius: 18px;
+        padding: 16px 18px;
+        margin-bottom: 14px;
+    }
+    .identity-label {
+        color: #ffffff !important;
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: .03em;
+        opacity: 0.96;
+        margin-bottom: 6px;
+    }
+    .identity-company {
+        color: #ffffff !important;
+        font-size: 38px;
+        font-weight: 950;
+        line-height: 1.08;
+        margin-bottom: 18px;
+        text-shadow: 0 2px 10px rgba(0,0,0,.28);
+        word-break: break-word;
+    }
+    .identity-ticker {
+        color: #ffffff !important;
+        font-size: 46px;
+        font-weight: 950;
+        line-height: 1.0;
+        margin-bottom: 6px;
+        text-shadow: 0 2px 10px rgba(0,0,0,.28);
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -795,6 +828,39 @@ def make_mindmap_html(selected_ticker=None):
     .small-label {color:#cbd5e1;font-size:13px;font-weight:800;margin-top:6px;margin-bottom:2px;}
     .hero-company-main {font-size:34px;font-weight:900;line-height:1.05;color:white;margin-bottom:14px;word-break:break-word;}
     .hero-ticker-code {font-size:42px;font-weight:900;line-height:1.0;color:white;margin-bottom:12px;}
+
+    .identity-box {
+        background: rgba(255,255,255,0.10);
+        border: 1px solid rgba(255,255,255,0.22);
+        border-radius: 18px;
+        padding: 16px 18px;
+        margin-bottom: 14px;
+    }
+    .identity-label {
+        color: #ffffff !important;
+        font-size: 15px;
+        font-weight: 900;
+        letter-spacing: .03em;
+        opacity: 0.96;
+        margin-bottom: 6px;
+    }
+    .identity-company {
+        color: #ffffff !important;
+        font-size: 38px;
+        font-weight: 950;
+        line-height: 1.08;
+        margin-bottom: 18px;
+        text-shadow: 0 2px 10px rgba(0,0,0,.28);
+        word-break: break-word;
+    }
+    .identity-ticker {
+        color: #ffffff !important;
+        font-size: 46px;
+        font-weight: 950;
+        line-height: 1.0;
+        margin-bottom: 6px;
+        text-shadow: 0 2px 10px rgba(0,0,0,.28);
+    }
     </style></head><body>
     <div class="map"><div class="center"><div class="ai">AI</div></div><div class="branches">{''.join(blocks)}</div></div>
     </body></html>
@@ -876,11 +942,18 @@ def show_stock_page(row):
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
     col1, col2 = st.columns([1.1, 2])
     with col1:
-        display_company_name = clean_company_name(row["company"])
-        st.markdown('<div class="small-label">会社名</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="hero-company-main">{display_company_name}</div>', unsafe_allow_html=True)
-        st.markdown('<div class="small-label">ティッカーコード</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="hero-ticker-code">{row["ticker"]}</div>', unsafe_allow_html=True)
+        display_company_name = clean_company_name(row["company"]) or row["ticker"]
+        st.markdown(
+            f"""
+            <div class="identity-box">
+                <div class="identity-label">会社名</div>
+                <div class="identity-company">{display_company_name}</div>
+                <div class="identity-label">ティッカーコード</div>
+                <div class="identity-ticker">{row["ticker"]}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.markdown(f'<span class="badge">{display_category}</span>', unsafe_allow_html=True)
         st.markdown(f'<span class="badge">AI関連度 {stars(row["ai_score"])}</span>', unsafe_allow_html=True)
         st.markdown(f'<span class="badge">取得コード {row["yf_ticker"]}</span>', unsafe_allow_html=True)
@@ -973,8 +1046,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v17</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">会社名/ティッカー表示を整理し、英語の事業内容を日本語へ自動翻訳する版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v18</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">会社名/ティッカーコードを濃く大きく表示し、視認性を改善した版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

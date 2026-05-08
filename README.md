@@ -1,3 +1,13 @@
+# AI関連株コード辞典 v25 Streamlit Safe UI
+
+## v25で修正した内容
+- v24で出ていた `removeChild` 系の画面エラーを回避
+- 原因だった「HTMLのdiv内にStreamlitの入力欄・ボタンを入れる構造」を廃止
+- 検索欄とボタンはStreamlit標準のcolumns/containerで安全に配置
+- 2枚目の参考画像に近い見た目は維持
+- 上部タイトルが切れないように調整
+- 自動取得データと株価チャートの順番は維持
+
 # AI関連株コード辞典 v24 Reference UI
 
 ## v24で変更した内容

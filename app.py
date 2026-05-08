@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v24", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v25", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v24 Clean
+# AI関連株コード辞典 v25 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -1830,6 +1830,148 @@ st.markdown(
             grid-template-columns: 1fr !important;
         }
     }
+
+    /* AI_STOCK_V25_STREAMLIT_SAFE_UI_CSS */
+    .block-container {
+        max-width: 1220px !important;
+        padding-top: 0.75rem !important;
+        padding-left: 1.35rem !important;
+        padding-right: 1.35rem !important;
+    }
+
+    .v25-card {
+        background: #ffffff;
+        border: 1px solid #dbe4ef;
+        border-radius: 16px;
+        box-shadow: 0 5px 16px rgba(15,23,42,.05);
+        padding: 14px 16px;
+        margin-bottom: 14px;
+    }
+    .v25-card-title {
+        color: #0f172a;
+        font-size: 17px;
+        font-weight: 950;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .v25-identity-table {
+        border: 1px solid #e4e9f0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fcfdff;
+    }
+    .v25-row {
+        display: grid;
+        gap: 12px;
+        padding: 14px 16px;
+        align-items: center;
+    }
+    .v25-row + .v25-row {
+        border-top: 1px solid #e9eef5;
+    }
+    .v25-company-row {
+        grid-template-columns: 160px minmax(0, 1fr);
+    }
+    .v25-ticker-row {
+        grid-template-columns: 160px minmax(0, 1fr) 74px auto;
+    }
+    .v25-label {
+        color: #334155;
+        font-size: 15px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .v25-company-value {
+        color: #0f172a;
+        font-size: clamp(19px, 2.2vw, 27px);
+        font-weight: 950;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .v25-ticker-value {
+        color: #0f172a;
+        font-size: clamp(22px, 2.5vw, 30px);
+        font-weight: 950;
+        line-height: 1.1;
+    }
+    .v25-class-pill {
+        justify-self: start;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f3e8ff;
+        color: #7c3aed;
+        border: 1px solid #e9d5ff;
+        border-radius: 10px;
+        padding: 6px 10px;
+        font-size: 13px;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+    .v25-section-text {
+        color: #334155;
+        font-size: 14px;
+        line-height: 1.65;
+        font-weight: 650;
+    }
+    .v25-search-note {
+        color: #475569;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+    .v25-search-box {
+        background: #ffffff;
+        border: 1px solid #dbe4ef;
+        border-radius: 16px;
+        box-shadow: 0 5px 16px rgba(15,23,42,.05);
+        padding: 14px 16px;
+        margin-bottom: 14px;
+    }
+    .v25-search-box [data-testid="stTextInput"] label {
+        display: none !important;
+    }
+    .v25-search-box [data-testid="stTextInput"] input {
+        height: 42px !important;
+        min-height: 42px !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+    }
+    .v25-search-box .stButton > button {
+        height: 42px !important;
+        border-radius: 10px !important;
+        font-weight: 900 !important;
+    }
+    .v25-search-box .v25-search-button .stButton > button {
+        background: linear-gradient(135deg, #08224f 0%, #0b3a86 100%) !important;
+        color: white !important;
+        border: none !important;
+    }
+    .v25-section-card {
+        background: #ffffff;
+        border: 1px solid #dbe4ef;
+        border-radius: 16px;
+        box-shadow: 0 5px 16px rgba(15,23,42,.05);
+        padding: 14px 16px;
+        margin-bottom: 14px;
+    }
+    .v25-section-title {
+        color: #0f172a;
+        font-size: 17px;
+        font-weight: 950;
+        margin-bottom: 8px;
+    }
+
+    @media (max-width: 900px) {
+        .v25-company-row, .v25-ticker-row {
+            grid-template-columns: 1fr !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -1993,6 +2135,7 @@ def show_register_box(row):
         st.code(sample, language="csv")
 
 
+
 def show_stock_page(row):
     combined, source_map = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
 
@@ -2012,24 +2155,22 @@ def show_stock_page(row):
     display_company_name = clean_company_name(row["company"]) or row["ticker"]
 
     top_left, top_right = st.columns([1.22, 1.0], gap="large")
-    fav_clicked = False
-    search_clicked = False
 
     with top_left:
         st.markdown(
             f"""
-            <div class="site-card top-section-card">
-                <div class="card-head">🏢 企業情報</div>
-                <div class="identity-table">
-                    <div class="identity-row company">
-                        <div class="identity-label">会社名</div>
-                        <div class="identity-value">{display_company_name}</div>
+            <div class="v25-card">
+                <div class="v25-card-title">🏢 企業情報</div>
+                <div class="v25-identity-table">
+                    <div class="v25-row v25-company-row">
+                        <div class="v25-label">会社名</div>
+                        <div class="v25-company-value">{display_company_name}</div>
                     </div>
-                    <div class="identity-row ticker">
-                        <div class="identity-label">ティッカーコード</div>
-                        <div class="identity-ticker">{row["ticker"]}</div>
-                        <div class="class-label">分類</div>
-                        <div class="class-pill">{display_category or "未取得"}</div>
+                    <div class="v25-row v25-ticker-row">
+                        <div class="v25-label">ティッカーコード</div>
+                        <div class="v25-ticker-value">{row["ticker"]}</div>
+                        <div class="v25-label">分類</div>
+                        <div class="v25-class-pill">{display_category or "未取得"}</div>
                     </div>
                 </div>
             </div>
@@ -2038,21 +2179,28 @@ def show_stock_page(row):
         )
 
     with top_right:
-        st.markdown('<div class="site-card search-panel-card"><div class="card-head">🔎 ティッカーコード検索</div><div class="search-help">ティッカーコードを入力</div><div class="search-grid">', unsafe_allow_html=True)
-        input_col, fav_col = st.columns([1.25, 0.8], gap="small")
-        with input_col:
-            st.text_input(
-                "ティッカーコード検索",
-                key="ticker_search_input",
-                on_change=sync_ticker_input,
-                placeholder="例：AAPL",
-                label_visibility="collapsed",
-            )
-        with fav_col:
-            fav_clicked = st.button("☆ お気に入り登録", key=f"fav_top_{row['ticker']}", use_container_width=True)
-        st.markdown('</div><div class="search-action-row">', unsafe_allow_html=True)
-        search_clicked = st.button("🔍　検索", key=f"search_btn_{row['ticker']}", use_container_width=True)
-        st.markdown('</div></div>', unsafe_allow_html=True)
+        # HTMLの中にStreamlit部品を入れない。カードはStreamlitコンテナとして安全に作る。
+        with st.container():
+            st.markdown('<div class="v25-search-box">', unsafe_allow_html=True)
+            st.markdown('<div class="v25-card-title">🔎 ティッカーコード検索</div>', unsafe_allow_html=True)
+            st.markdown('<div class="v25-search-note">ティッカーコードを入力</div>', unsafe_allow_html=True)
+
+            input_col, fav_col = st.columns([1.25, 0.8], gap="small")
+            with input_col:
+                st.text_input(
+                    "ティッカーコード検索",
+                    key="ticker_search_input",
+                    on_change=sync_ticker_input,
+                    placeholder="例：AAPL",
+                    label_visibility="collapsed",
+                )
+            with fav_col:
+                fav_clicked = st.button("☆ お気に入り登録", key=f"fav_top_{row['ticker']}", use_container_width=True)
+
+            st.markdown('<div class="v25-search-button">', unsafe_allow_html=True)
+            search_clicked = st.button("🔍　検索", key=f"search_btn_{row['ticker']}", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
     if fav_clicked:
         add_favorite_stock(row["ticker"], display_company_name, display_category)
@@ -2064,17 +2212,17 @@ def show_stock_page(row):
 
     st.markdown(
         f"""
-        <div class="site-card section-card">
-            <div class="section-title">📘 何を作るか / 事業内容</div>
-            <div class="section-text">{display_business}</div>
+        <div class="v25-section-card">
+            <div class="v25-section-title">📘 何を作るか / 事業内容</div>
+            <div class="v25-section-text">{display_business}</div>
         </div>
-        <div class="site-card section-card">
-            <div class="section-title">🔗 AIとのつながり</div>
-            <div class="section-text">{display_relation}</div>
+        <div class="v25-section-card">
+            <div class="v25-section-title">🔗 AIとのつながり</div>
+            <div class="v25-section-text">{display_relation}</div>
         </div>
-        <div class="site-card section-card">
-            <div class="section-title">🏷 分類</div>
-            <div class="section-class-grid">
+        <div class="v25-section-card">
+            <div class="v25-section-title">🏷 分類</div>
+            <div class="v25-section-text">
                 セクター：{display_category or "未取得"}<br>
                 業種：{display_industry or "未取得"}
             </div>
@@ -2095,7 +2243,7 @@ def show_stock_page(row):
             unsafe_allow_html=True,
         )
 
-    st.markdown('<div class="site-card auto-data-card"><div class="card-head">▦ 自動取得データ</div>', unsafe_allow_html=True)
+    st.markdown('<div class="v25-section-card"><div class="v25-section-title">▦ 自動取得データ</div>', unsafe_allow_html=True)
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
         st.markdown(
             """
@@ -2140,7 +2288,7 @@ def show_stock_page(row):
     st.caption("※ 自動取得データは参考値です。無料API / yfinance は欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
     st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="site-card chart-card"><div class="card-head">📈 株価チャート</div>', unsafe_allow_html=True)
+    st.markdown('<div class="v25-section-card"><div class="v25-section-title">📈 株価チャート</div>', unsafe_allow_html=True)
     hist = get_yf_history(row["yf_ticker"], period_map[period_label])
     if hist.empty:
         st.warning("チャートデータを取得できませんでした。")
@@ -2168,7 +2316,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v24</div>
+            <div class="hero-title-main">AI関連株コード辞典 v25</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>

@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v9.1", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v9.2", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v9.1
+# AI関連株コード辞典 v9.2
 # 目的：
 # yfinanceを中心に、FMP / Alpha Vantage / Finnhub の無料APIを補助として使う構造
 #
@@ -57,6 +57,14 @@ init_favorites()
 
 if "last_ticker" not in st.session_state:
     st.session_state.last_ticker = "NVDA"
+
+if "ticker_search_input" not in st.session_state:
+    st.session_state.ticker_search_input = st.session_state.last_ticker
+
+def sync_ticker_input():
+    value = st.session_state.get("ticker_search_input", "").strip().upper()
+    if value:
+        st.session_state.last_ticker = value
 
 def add_favorite_stock(ticker, company, category):
     ticker = str(ticker).upper().strip()
@@ -264,17 +272,46 @@ def get_yfinance_data(yf_ticker):
     try:
         t = yf.Ticker(yf_ticker)
 
-        # fast_info
+        # 1) fast_info：株価・前日終値・時価総額が取れやすい
         try:
             fast = t.fast_info
-            result["price"] = getattr(fast, "last_price", None) or fast.get("last_price")
-            result["prev_close"] = getattr(fast, "previous_close", None) or fast.get("previous_close")
-            result["market_cap"] = getattr(fast, "market_cap", None) or fast.get("market_cap")
-            result["currency"] = getattr(fast, "currency", "") or fast.get("currency", "")
+            def fget(obj, key):
+                try:
+                    return getattr(obj, key)
+                except Exception:
+                    try:
+                        return obj.get(key)
+                    except Exception:
+                        return None
+
+            result["price"] = pick_first(
+                fget(fast, "last_price"),
+                fget(fast, "lastPrice"),
+            )
+            result["prev_close"] = pick_first(
+                fget(fast, "previous_close"),
+                fget(fast, "previousClose"),
+            )
+            result["market_cap"] = pick_first(
+                fget(fast, "market_cap"),
+                fget(fast, "marketCap"),
+            )
+            result["currency"] = pick_first(
+                fget(fast, "currency"),
+                ""
+            )
+            result["fifty_two_high"] = pick_first(
+                fget(fast, "year_high"),
+                fget(fast, "yearHigh"),
+            )
+            result["fifty_two_low"] = pick_first(
+                fget(fast, "year_low"),
+                fget(fast, "yearLow"),
+            )
         except Exception:
             pass
 
-        # info
+        # 2) info：PER/PBR/分類が取れることがある
         try:
             info = t.info or {}
             result["price"] = pick_first(result["price"], info.get("currentPrice"), info.get("regularMarketPrice"))
@@ -283,8 +320,8 @@ def get_yfinance_data(yf_ticker):
             result["per"] = pick_first(info.get("trailingPE"))
             result["forward_pe"] = pick_first(info.get("forwardPE"))
             result["pbr"] = pick_first(info.get("priceToBook"))
-            result["fifty_two_high"] = pick_first(info.get("fiftyTwoWeekHigh"))
-            result["fifty_two_low"] = pick_first(info.get("fiftyTwoWeekLow"))
+            result["fifty_two_high"] = pick_first(result["fifty_two_high"], info.get("fiftyTwoWeekHigh"))
+            result["fifty_two_low"] = pick_first(result["fifty_two_low"], info.get("fiftyTwoWeekLow"))
             result["dividend_yield"] = pick_first(info.get("dividendYield"))
             result["currency"] = pick_first(result["currency"], info.get("currency"), "")
             result["sector"] = pick_first(info.get("sector"), "")
@@ -292,8 +329,8 @@ def get_yfinance_data(yf_ticker):
         except Exception:
             pass
 
-        # history backup
-        if result["price"] is None or result["prev_close"] is None:
+        # 3) history：株価と前日終値の最終バックアップ
+        try:
             hist = t.history(period="5d")
             if hist is not None and not hist.empty:
                 closes = hist["Close"].dropna().tolist()
@@ -301,6 +338,8 @@ def get_yfinance_data(yf_ticker):
                     result["price"] = pick_first(result["price"], closes[-1])
                 if len(closes) >= 2:
                     result["prev_close"] = pick_first(result["prev_close"], closes[-2])
+        except Exception:
+            pass
 
         if result["price"] is not None and result["prev_close"] not in [None, 0]:
             result["change_pct"] = (float(result["price"]) - float(result["prev_close"])) / float(result["prev_close"]) * 100
@@ -975,7 +1014,17 @@ def show_favorite_register(row, display_category):
     st.caption("※ 現在のお気に入り登録はセッション内保存です。サイトを再起動すると消える場合があります。永続保存は次段階で追加できます。")
 
 def show_stock_page(row):
-    combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
+    try:
+        combined, source_map, yf_data, fmp_data, alpha_data, finnhub_data = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
+    except Exception as e:
+        st.warning(f"自動取得データの取得でエラーが出ました：{e}")
+        combined = {
+            "price": None, "prev_close": None, "change_pct": None, "market_cap": None,
+            "per": None, "forward_pe": None, "pbr": None, "forward_pbr": None,
+            "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
+            "currency": "", "sector": "", "industry": ""
+        }
+        source_map = {}
 
     # 未登録銘柄でも、取得できた分類を優先して表示
     display_category = row.get("category", "未分類")
@@ -1112,8 +1161,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v9.1</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">v9安定版に、最後に入力したティッカーを保持する機能だけを追加した版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v9.2</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">v9安定版に、ティッカー保持の確実化とyfinance取得の安全化だけを追加した版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
@@ -1124,16 +1173,24 @@ st.sidebar.caption("米国株例：NVDA / AAPL / MSFT / T")
 st.sidebar.caption("AI関連図は左メニューから確認できます。")
 
 if mode == "ティッカー検索":
-    ticker = st.text_input("ティッカーコードを入力", value="NVDA").strip().upper()
-    hit = df[(df["ticker"] == ticker) | (df["yf_ticker"] == ticker)]
+    st.text_input(
+        "ティッカーコードを入力",
+        key="ticker_search_input",
+        on_change=sync_ticker_input,
+    )
+
+    ticker = st.session_state.get("last_ticker", "NVDA").strip().upper()
+
+    hit = df[
+        (df["ticker"].str.upper() == ticker)
+        | (df["yf_ticker"].str.upper() == ticker)
+    ]
 
     if hit.empty:
-        virtual_row = make_virtual_row(ticker)
-        show_stock_page(virtual_row)
+        st.error("そのティッカーはまだ登録されていません。stocks.csv に追加してください。")
+        st.dataframe(df[["ticker", "yf_ticker", "company", "category"]], use_container_width=True, hide_index=True)
     else:
-        row = hit.iloc[0].copy()
-        row["_virtual"] = False
-        show_stock_page(row)
+        show_stock_page(hit.iloc[0])
 
 elif mode == "キーワード検索":
     keyword = st.text_input("キーワードを入力", value="冷却").strip()

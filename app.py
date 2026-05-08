@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v19", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v20", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v19 Clean
+# AI関連株コード辞典 v20 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -820,6 +820,72 @@ st.markdown(
             font-size: 36px !important;
         }
     }
+
+    /* AI_STOCK_V20_IDENTITY_BALANCE_CSS */
+    .identity-box {
+        background: #ffffff !important;
+        border: 1.5px solid #d8dee8 !important;
+        border-radius: 16px !important;
+        padding: 14px 16px !important;
+        margin-bottom: 14px !important;
+        box-shadow: 0 4px 14px rgba(15,23,42,.10) !important;
+        max-width: 100% !important;
+    }
+    .identity-row {
+        display: grid !important;
+        grid-template-columns: 130px minmax(0, 1fr) !important;
+        gap: 12px !important;
+        align-items: center !important;
+        padding: 10px 0 !important;
+        border-bottom: 1px solid #eef2f7 !important;
+    }
+    .identity-row:last-child {
+        border-bottom: none !important;
+    }
+    .identity-label {
+        color: #334155 !important;
+        font-size: 16px !important;
+        font-weight: 900 !important;
+        line-height: 1.2 !important;
+        white-space: nowrap !important;
+    }
+    .identity-company {
+        color: #0f172a !important;
+        font-size: clamp(22px, 2.1vw, 30px) !important;
+        font-weight: 950 !important;
+        line-height: 1.1 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        text-align: left !important;
+    }
+    .identity-ticker {
+        color: #0b1f4d !important;
+        font-size: clamp(26px, 2.5vw, 36px) !important;
+        font-weight: 950 !important;
+        line-height: 1.05 !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        text-align: left !important;
+    }
+    @media (max-width: 720px) {
+        .identity-row {
+            grid-template-columns: 120px minmax(0, 1fr) !important;
+            gap: 8px !important;
+        }
+        .identity-label {
+            font-size: 15px !important;
+        }
+        .identity-company {
+            font-size: 23px !important;
+        }
+        .identity-ticker {
+            font-size: 30px !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -999,7 +1065,7 @@ def show_stock_page(row):
         display_relation = auto_ai_relation(display_category, display_industry, display_business)
 
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
-    col1, col2 = st.columns([1.1, 2])
+    col1, col2 = st.columns([1.25, 2.25])
     with col1:
         display_company_name = clean_company_name(row["company"]) or row["ticker"] or row["ticker"]
         st.markdown(
@@ -1109,8 +1175,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v19</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">会社名とティッカーコードを白背景カードで黒〜紺色に見やすく表示する版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v20</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">会社名とティッカーコードの文字サイズ・配列・配置バランスを改善した版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

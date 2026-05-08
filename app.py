@@ -13,10 +13,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v28", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v29", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v28 Clean
+# AI関連株コード辞典 v29 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -129,6 +129,25 @@ def fmt_market_cap(x):
     except Exception:
         return str(x)
 
+
+def fmt_date_value(x):
+    if x is None or x == "" or (hasattr(pd, "isna") and not isinstance(x, (list, dict, pd.DataFrame)) and pd.isna(x)):
+        return "未取得"
+    try:
+        if hasattr(x, "strftime"):
+            return x.strftime("%Y/%m/%d")
+        return str(x)[:10]
+    except Exception:
+        return str(x)
+
+def fmt_news_title(x):
+    x = str(x or "").strip()
+    if not x:
+        return "未取得"
+    if len(x) > 34:
+        return x[:34] + "..."
+    return x
+
 def metric_card(label, value, sub=None):
     sub_html = f'<div class="metric-sub">{sub}</div>' if sub else '<div class="metric-sub">&nbsp;</div>'
     st.markdown(
@@ -171,7 +190,7 @@ def get_yf_data(yf_ticker):
     result = {
         "price": None, "prev_close": None, "change_pct": None,
         "market_cap": None, "per": None, "forward_pe": None, "pbr": None,
-        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
+        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None, "eps": None, "roe": None, "earnings_date": None, "news_headline": None,
         "currency": "", "company": "", "sector": "", "industry": "", "description": "",
     }
     try:
@@ -211,6 +230,9 @@ def get_yf_data(yf_ticker):
             result["fifty_two_high"] = pick_first(result["fifty_two_high"], info.get("fiftyTwoWeekHigh"))
             result["fifty_two_low"] = pick_first(result["fifty_two_low"], info.get("fiftyTwoWeekLow"))
             result["dividend_yield"] = pick_first(info.get("dividendYield"))
+            result["eps"] = pick_first(info.get("trailingEps"), info.get("epsTrailingTwelveMonths"), info.get("forwardEps"))
+            result["roe"] = pick_first(info.get("returnOnEquity"))
+            result["earnings_date"] = pick_first(info.get("earningsDate"), info.get("mostRecentQuarter"))
             result["currency"] = pick_first(result["currency"], info.get("currency"), "")
         except Exception:
             pass
@@ -223,6 +245,33 @@ def get_yf_data(yf_ticker):
                     result["price"] = pick_first(result["price"], closes[-1])
                 if len(closes) >= 2:
                     result["prev_close"] = pick_first(result["prev_close"], closes[-2])
+        except Exception:
+            pass
+
+        try:
+            cal = t.calendar
+            if cal is not None:
+                if isinstance(cal, pd.DataFrame) and not cal.empty:
+                    for key in ["Earnings Date", "Earnings Average", "Earnings Low", "Earnings High"]:
+                        if key in cal.index:
+                            val = cal.loc[key].dropna()
+                            if len(val) > 0:
+                                result["earnings_date"] = pick_first(result["earnings_date"], val.iloc[0])
+                                break
+                elif isinstance(cal, dict):
+                    ed = pick_first(cal.get("Earnings Date"), cal.get("EarningsDate"), cal.get("earningsDate"))
+                    if isinstance(ed, (list, tuple)) and len(ed) > 0:
+                        ed = ed[0]
+                    result["earnings_date"] = pick_first(result["earnings_date"], ed)
+        except Exception:
+            pass
+
+        try:
+            news = getattr(t, "news", None)
+            if news:
+                first = news[0]
+                title = pick_first(first.get("title"), first.get("content", {}).get("title") if isinstance(first.get("content"), dict) else None)
+                result["news_headline"] = pick_first(result["news_headline"], title)
         except Exception:
             pass
 
@@ -349,7 +398,7 @@ def get_fmp_data(symbol, api_key):
     result = {
         "price": None, "prev_close": None, "change_pct": None,
         "market_cap": None, "per": None, "forward_pe": None, "pbr": None,
-        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None,
+        "fifty_two_high": None, "fifty_two_low": None, "dividend_yield": None, "eps": None, "roe": None, "earnings_date": None, "news_headline": None,
         "currency": "", "company": "", "sector": "", "industry": "", "description": "",
     }
     if not symbol or not api_key:
@@ -494,7 +543,7 @@ def get_combined_data(yf_ticker, fmp_key, alpha_key, finnhub_key):
 
     keys = [
         "price", "prev_close", "change_pct", "market_cap", "per", "forward_pe", "pbr",
-        "fifty_two_high", "fifty_two_low", "dividend_yield", "currency",
+        "fifty_two_high", "fifty_two_low", "dividend_yield", "eps", "roe", "earnings_date", "news_headline", "currency",
         "company", "sector", "industry", "description"
     ]
     result, source_map = {}, {}
@@ -2195,6 +2244,7 @@ def show_source_table(source_map):
         ("株価", "price"), ("前日終値", "prev_close"), ("前日比", "change_pct"),
         ("時価総額", "market_cap"), ("PER", "per"), ("予想PER", "forward_pe"), ("PBR", "pbr"),
         ("52週高値", "fifty_two_high"), ("52週安値", "fifty_two_low"), ("配当利回り", "dividend_yield"),
+        ("EPS", "eps"), ("ROE", "roe"), ("決算日", "earnings_date"), ("ニュース見出し", "news_headline"),
     ]
     st.dataframe(
         pd.DataFrame([{"項目": label, "取得元": source_map.get(key, "未取得")} for label, key in labels]),
@@ -2326,7 +2376,7 @@ def show_stock_page(row):
     if bool(row.get("_virtual", False)):
         pass
 
-    st.markdown('<div class="v25-section-card"><div class="v25-section-title">▦ 自動取得データ</div>', unsafe_allow_html=True)
+    st.markdown('<div class="v25-section-card"><div class="v25-section-title">▦ データ自動取得</div>', unsafe_allow_html=True)
     if not FMP_API_KEY and not ALPHAVANTAGE_API_KEY and not FINNHUB_API_KEY:
         pass
     else:
@@ -2336,14 +2386,6 @@ def show_stock_page(row):
         if ALPHAVANTAGE_API_KEY: active.append("Alpha Vantage")
         st.markdown(f'<div class="safe">補助APIが有効です：<b>{", ".join(active)}</b></div>', unsafe_allow_html=True)
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1: metric_card("株価", fmt_price(combined["price"], combined["currency"]), delta_text(combined["change_pct"]))
-    with c2: metric_card("時価総額", fmt_market_cap(combined["market_cap"]), f'取得元：{source_map.get("market_cap")}')
-    with c3: metric_card("PER", fmt_num(combined["per"]), f'取得元：{source_map.get("per")}')
-    with c4: metric_card("予想PER", fmt_num(combined["forward_pe"]), f'取得元：{source_map.get("forward_pe")}')
-    with c5: metric_card("PBR", fmt_num(combined["pbr"]), f'取得元：{source_map.get("pbr")}')
-    with c6: metric_card("前日終値", fmt_price(combined["prev_close"], combined["currency"]), f'取得元：{source_map.get("prev_close")}')
-
     dy = None
     if combined["dividend_yield"] is not None:
         try:
@@ -2351,11 +2393,25 @@ def show_stock_page(row):
         except Exception:
             dy = combined["dividend_yield"]
 
-    c7, c8, c9, c10 = st.columns(4)
-    with c7: metric_card("52週高値", fmt_price(combined["fifty_two_high"], combined["currency"]), f'取得元：{source_map.get("fifty_two_high")}')
-    with c8: metric_card("52週安値", fmt_price(combined["fifty_two_low"], combined["currency"]), f'取得元：{source_map.get("fifty_two_low")}')
-    with c9: metric_card("配当利回り", fmt_percent(dy), f'取得元：{source_map.get("dividend_yield")}')
-    with c10: metric_card("データ取得コード", row["ticker"], f'yfinance / API用コード')
+    roe = None
+    if combined.get("roe") is not None:
+        try:
+            roe = float(combined["roe"]) * 100 if abs(float(combined["roe"])) <= 1 else float(combined["roe"])
+        except Exception:
+            roe = combined["roe"]
+
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1: metric_card("株価", fmt_price(combined["price"], combined["currency"]), delta_text(combined["change_pct"]))
+    with c2: metric_card("時価総額", fmt_market_cap(combined["market_cap"]), f'取得元：{source_map.get("market_cap")}')
+    with c3: metric_card("PER", fmt_num(combined["per"]), f'取得元：{source_map.get("per")}')
+    with c4: metric_card("PBR", fmt_num(combined["pbr"]), f'取得元：{source_map.get("pbr")}')
+    with c5: metric_card("EPS", fmt_num(combined.get("eps")), f'取得元：{source_map.get("eps", "未取得")}')
+    with c6: metric_card("ROE", fmt_percent(roe), f'取得元：{source_map.get("roe", "未取得")}')
+
+    c7, c8, c9 = st.columns(3)
+    with c7: metric_card("利回り", fmt_percent(dy), f'取得元：{source_map.get("dividend_yield")}')
+    with c8: metric_card("決算日", fmt_date_value(combined.get("earnings_date")), f'取得元：{source_map.get("earnings_date", "未取得")}')
+    with c9: metric_card("ニュース見出し", fmt_news_title(combined.get("news_headline")), f'取得元：{source_map.get("news_headline", "未取得")}')
 
     with st.expander("📌 取得元を確認する"):
         show_source_table(source_map)
@@ -2392,7 +2448,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v28</div>
+            <div class="hero-title-main">AI関連株コード辞典 v29</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2405,7 +2461,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v28</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v29</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

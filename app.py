@@ -8,10 +8,15 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v16", page_icon="📈", layout="wide")
+try:
+    from deep_translator import GoogleTranslator
+except Exception:
+    GoogleTranslator = None
+
+st.set_page_config(page_title="AI関連株コード辞典 v17", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v16 Clean
+# AI関連株コード辞典 v17 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -548,6 +553,64 @@ def trim_text(text, max_len=420):
         return text
     return text[:max_len] + "..."
 
+
+def has_japanese(text):
+    text = str(text or "")
+    return any(
+        ("\u3040" <= ch <= "\u30ff") or ("\u4e00" <= ch <= "\u9fff")
+        for ch in text
+    )
+
+def looks_english(text):
+    text = str(text or "").strip()
+    if not text:
+        return False
+    ascii_count = sum(1 for ch in text if ord(ch) < 128 and ch.isalpha())
+    return ascii_count >= max(10, len(text) * 0.25) and not has_japanese(text)
+
+@st.cache_data(ttl=86400)
+def translate_to_japanese(text):
+    """
+    英語で取得された会社概要を日本語へ変換。
+    deep-translator が使えない場合は原文を返す。
+    """
+    text = str(text or "").strip()
+    if not text:
+        return ""
+    if has_japanese(text):
+        return text
+    if not looks_english(text):
+        return text
+    if GoogleTranslator is None:
+        return text
+
+    try:
+        # 長文すぎると失敗しやすいので短めに制限
+        limited = text[:2500]
+        return GoogleTranslator(source="auto", target="ja").translate(limited)
+    except Exception:
+        return text
+
+def clean_company_name(name):
+    """
+    表示用に会社名を短くする。
+    例：AT&T Inc. -> AT&T
+    """
+    name = str(name or "").strip()
+    suffixes = [
+        ", Inc.", " Inc.", " Inc", ", Inc",
+        " Corporation", " Corp.", " Corp",
+        " Incorporated",
+        " plc", " PLC",
+        " Ltd.", " Ltd", " Limited",
+        " Co., Ltd.", " Co. Ltd.", " Company",
+    ]
+    for s in suffixes:
+        if name.endswith(s):
+            name = name[: -len(s)].strip()
+    return name or str(name or "").strip()
+
+
 def build_row_from_ticker(ticker):
     t = str(ticker).strip().upper()
     hit = df[(df["ticker"].str.upper() == t) | (df["yf_ticker"].str.upper() == t)]
@@ -563,7 +626,7 @@ def build_row_from_ticker(ticker):
     description = trim_text(combined.get("description"), 520)
 
     if description:
-        business = description
+        business = translate_to_japanese(description)
     elif category or industry:
         business = f"取得分類：{category or '未取得'} / {industry or '未取得'}"
     else:
@@ -661,6 +724,10 @@ st.markdown(
     .profile-grid {background:#f8fafc;border:1px solid #e5e7eb;border-radius:16px;padding:12px 14px;margin-top:10px;margin-bottom:10px;color:#111827;}
     .profile-title {font-weight:900;color:#111827;margin-bottom:6px;}
     .profile-row {color:#334155;font-size:14px;line-height:1.6;}
+
+    .small-label {color:#cbd5e1;font-size:13px;font-weight:800;margin-top:6px;margin-bottom:2px;}
+    .hero-company-main {font-size:34px;font-weight:900;line-height:1.05;color:white;margin-bottom:14px;word-break:break-word;}
+    .hero-ticker-code {font-size:42px;font-weight:900;line-height:1.0;color:white;margin-bottom:12px;}
     </style>
     """,
     unsafe_allow_html=True,
@@ -724,6 +791,10 @@ def make_mindmap_html(selected_ticker=None):
     .node.stock small {{display:block;font-weight:500;color:#555;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}}
     .node.stock.active {{background:#fff7d6;border:3px solid #f59e0b;transform:scale(1.01);}}
     @media (max-width:760px) {{.branches {{grid-template-columns:1fr;}} .node.stock {{width:100%;}} .ai {{width:82px;height:82px;font-size:34px;}}}}
+
+    .small-label {color:#cbd5e1;font-size:13px;font-weight:800;margin-top:6px;margin-bottom:2px;}
+    .hero-company-main {font-size:34px;font-weight:900;line-height:1.05;color:white;margin-bottom:14px;word-break:break-word;}
+    .hero-ticker-code {font-size:42px;font-weight:900;line-height:1.0;color:white;margin-bottom:12px;}
     </style></head><body>
     <div class="map"><div class="center"><div class="ai">AI</div></div><div class="branches">{''.join(blocks)}</div></div>
     </body></html>
@@ -791,21 +862,25 @@ def show_stock_page(row):
 
     display_category = row.get("category", "未分類") or "未分類"
     display_industry = combined.get("industry") or ""
-    display_business = row.get("business", "")
+    display_business = translate_to_japanese(row.get("business", ""))
     display_relation = row.get("ai_relation", "")
 
     # 未登録銘柄の場合は、API取得情報を優先
     if bool(row.get("_virtual", False)):
         display_category = combined.get("sector") or row.get("category", "未分類")
         display_industry = combined.get("industry") or ""
-        display_business = trim_text(combined.get("description") or row.get("business", ""), 520)
+        raw_business = combined.get("description") or row.get("business", "")
+        display_business = trim_text(translate_to_japanese(raw_business), 520)
         display_relation = auto_ai_relation(display_category, display_industry, display_business)
 
     st.markdown('<div class="hero-card">', unsafe_allow_html=True)
     col1, col2 = st.columns([1.1, 2])
     with col1:
-        st.markdown(f'<div class="hero-ticker">{row["ticker"]}</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="hero-company">{row["company"]}</div>', unsafe_allow_html=True)
+        display_company_name = clean_company_name(row["company"])
+        st.markdown('<div class="small-label">会社名</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="hero-company-main">{display_company_name}</div>', unsafe_allow_html=True)
+        st.markdown('<div class="small-label">ティッカーコード</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="hero-ticker-code">{row["ticker"]}</div>', unsafe_allow_html=True)
         st.markdown(f'<span class="badge">{display_category}</span>', unsafe_allow_html=True)
         st.markdown(f'<span class="badge">AI関連度 {stars(row["ai_score"])}</span>', unsafe_allow_html=True)
         st.markdown(f'<span class="badge">取得コード {row["yf_ticker"]}</span>', unsafe_allow_html=True)
@@ -898,8 +973,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v16</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">未登録ティッカーでも、会社名をYahoo検索APIなどで補完して表示しやすくした版です。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v17</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">会社名/ティッカー表示を整理し、英語の事業内容を日本語へ自動翻訳する版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

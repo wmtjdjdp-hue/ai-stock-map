@@ -1,4 +1,15 @@
-# AI関連株コード辞典 v16 Company Name Fallback
+# AI関連株コード辞典 v17 Japanese Translation
+
+## v17で追加した内容
+- 表示を「会社名」「ティッカーコード」に分離
+- `AT&T Inc.` などは表示用に `AT&T` のように短く表示
+- 英語で取得された事業内容を deep-translator 経由で日本語に自動翻訳
+- 翻訳に失敗した場合は英語の原文を表示してアプリは止めない
+
+## 追加ライブラリ
+- deep-translator
+
+# AI関連株コード辞典 v17 Japanese Translation
 
 ## v16で修正した内容
 - 未登録ティッカーで会社名が `T` のようにティッカーだけになる問題を改善
@@ -6,7 +17,7 @@
 - 代表的な銘柄 `T` / `D` / `ARM` / `AAPL` / `MSFT` / `GOOGL` はローカル補完も追加
 - 取得元表示に `Yahoo Search` が出る場合があります
 
-# AI関連株コード辞典 v16 Company Name Fallback
+# AI関連株コード辞典 v17 Japanese Translation
 
 ## v15で追加・整理したこと
 - 登録済み銘柄は stocks.csv の情報を優先表示

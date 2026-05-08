@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v33", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v34", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v33 Clean
+# AI関連株コード辞典 v34 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -215,16 +215,20 @@ def get_service_account_info():
             pass
         return None
 
-@st.cache_resource
 def get_gspread_worksheet():
     try:
         if not google_sheet_enabled():
-            st.session_state.google_sheet_last_error = "Googleスプレッドシート未設定、またはgspreadが未使用です。"
+            st.session_state.google_sheet_last_error = "GOOGLE_SHEET_ID / gcp_service_account / gspread のいずれかが未設定です。"
             return None
 
         info = get_service_account_info()
         if not info:
             st.session_state.google_sheet_last_error = "gcp_service_account が読み取れません。Secretsを確認してください。"
+            return None
+
+        sheet_id = str(get_google_sheet_id()).strip()
+        if not sheet_id:
+            st.session_state.google_sheet_last_error = "GOOGLE_SHEET_ID が空です。"
             return None
 
         scopes = [
@@ -233,12 +237,25 @@ def get_gspread_worksheet():
         ]
         creds = Credentials.from_service_account_info(info, scopes=scopes)
         client = gspread.authorize(creds)
-        spreadsheet = client.open_by_key(get_google_sheet_id())
+
+        try:
+            spreadsheet = client.open_by_key(sheet_id)
+        except Exception as e:
+            email = str(info.get("client_email", ""))
+            st.session_state.google_sheet_last_error = (
+                f"スプレッドシートを開けません：{type(e).__name__} / {str(e) or repr(e)} / "
+                f"sheet_id={sheet_id[:6]}...{sheet_id[-6:]} / client_email={email}"
+            )
+            return None
 
         try:
             ws = spreadsheet.worksheet("stocks")
         except Exception:
-            ws = spreadsheet.add_worksheet(title="stocks", rows=1000, cols=len(REGISTER_COLS))
+            try:
+                ws = spreadsheet.add_worksheet(title="stocks", rows=1000, cols=len(REGISTER_COLS))
+            except Exception as e:
+                st.session_state.google_sheet_last_error = f"stocksシート作成エラー：{type(e).__name__} / {str(e) or repr(e)}"
+                return None
 
         try:
             header = ws.row_values(1)
@@ -246,29 +263,24 @@ def get_gspread_worksheet():
                 ws.append_row(REGISTER_COLS)
             elif header[:len(REGISTER_COLS)] != REGISTER_COLS:
                 ws.update("A1:J1", [REGISTER_COLS])
-        except Exception:
-            pass
+        except Exception as e:
+            st.session_state.google_sheet_last_error = f"ヘッダー確認エラー：{type(e).__name__} / {str(e) or repr(e)}"
+            return None
 
         st.session_state.google_sheet_last_error = ""
         return ws
 
     except Exception as e:
-        st.session_state.google_sheet_last_error = f"Googleスプレッドシート接続エラー：{e}"
+        st.session_state.google_sheet_last_error = f"Googleスプレッドシート接続エラー：{type(e).__name__} / {str(e) or repr(e)}"
         return None
 
-@st.cache_data(ttl=60)
 def load_google_sheet_stocks():
     try:
         ws = get_gspread_worksheet()
         if ws is None:
             return pd.DataFrame(columns=REGISTER_COLS)
 
-        try:
-            values = ws.get_all_values()
-        except Exception as e:
-            st.session_state.google_sheet_last_error = f"Googleシート読み込みエラー：{e}"
-            return pd.DataFrame(columns=REGISTER_COLS)
-
+        values = ws.get_all_values()
         if not values:
             return pd.DataFrame(columns=REGISTER_COLS)
 
@@ -289,10 +301,7 @@ def load_google_sheet_stocks():
         return out
 
     except Exception as e:
-        try:
-            st.session_state.google_sheet_last_error = f"Google保存読み込みエラー：{e}"
-        except Exception:
-            pass
+        st.session_state.google_sheet_last_error = f"Google保存読み込みエラー：{type(e).__name__} / {str(e) or repr(e)}"
         return pd.DataFrame(columns=REGISTER_COLS)
 
 def save_stock_to_google_sheet(row, category=None):
@@ -343,10 +352,6 @@ def save_stock_to_google_sheet(row, category=None):
         if ticker in tickers:
             row_no = tickers.index(ticker) + 1
             ws.update(f"A{row_no}:J{row_no}", [values])
-            try:
-                load_google_sheet_stocks.clear()
-            except Exception:
-                pass
             st.session_state.google_sheet_last_error = ""
             return True, "Googleスプレッドシートの既存行を更新しました"
         else:
@@ -355,10 +360,6 @@ def save_stock_to_google_sheet(row, category=None):
             if next_row < 2:
                 next_row = 2
             ws.update(f"A{next_row}:J{next_row}", [values])
-            try:
-                load_google_sheet_stocks.clear()
-            except Exception:
-                pass
             st.session_state.google_sheet_last_error = ""
             return True, "Googleスプレッドシートに追加しました"
 
@@ -2790,7 +2791,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v33</div>
+            <div class="hero-title-main">AI関連株コード辞典 v34</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2803,7 +2804,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v33</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v34</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -2947,6 +2948,21 @@ elif mode == "API設定確認":
     st.write("gcp_service_account:", "設定済み" if get_service_account_info() else "未設定")
     st.write("gspread:", "使用可能" if gspread is not None else "未インストール")
     st.write("接続エラー:", st.session_state.get("google_sheet_last_error", "") or "なし")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("接続キャッシュをクリア", use_container_width=True):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            st.session_state.google_sheet_last_error = ""
+            st.success("キャッシュをクリアしました。再度Google保存テストを押してください。")
+    with c2:
+        if st.button("Google接続だけ確認", use_container_width=True):
+            ws = get_gspread_worksheet()
+            if ws is not None:
+                st.success("Googleスプレッドシート接続OK：stocksシートを確認できました。")
+            else:
+                st.error("Google接続NG：" + (st.session_state.get("google_sheet_last_error", "") or "原因不明"))
+
 
     if st.button("Google保存テスト", use_container_width=True):
         test_row = {

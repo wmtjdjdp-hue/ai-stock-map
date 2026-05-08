@@ -1,3 +1,11 @@
+# AI関連株コード辞典 v34 No Google Cache
+
+## v34で修正した内容
+- Googleスプレッドシート接続処理のキャッシュを解除
+- 以前の404や接続失敗が残る問題を回避
+- API設定確認に「接続キャッシュをクリア」と「Google接続だけ確認」を追加
+- 404時に sheet_id と client_email の確認情報を表示
+
 # AI関連株コード辞典 v33 Google Save Debug
 
 ## v33で修正した内容

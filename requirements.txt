@@ -4,3 +4,7 @@ yfinance
 plotly
 requests
 deep-translator
+
+gspread
+
+google-auth

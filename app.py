@@ -7,16 +7,24 @@ from pathlib import Path
 from urllib.parse import quote_plus
 import requests
 import yfinance as yf
+import json
+
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+except Exception:
+    gspread = None
+    Credentials = None
 
 try:
     from deep_translator import GoogleTranslator
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v30", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v31", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v30 Clean
+# AI関連株コード辞典 v31 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -82,11 +90,18 @@ def get_registered_extra_df():
 
 def get_all_registered_df():
     base = df.copy()
+    google_df = load_google_sheet_stocks() if "load_google_sheet_stocks" in globals() else pd.DataFrame(columns=REGISTER_COLS)
     extra = get_registered_extra_df()
-    if extra.empty:
-        return base
-    combined = pd.concat([base[REGISTER_COLS], extra[REGISTER_COLS]], ignore_index=True)
+
+    parts = [base[REGISTER_COLS]]
+    if not google_df.empty:
+        parts.append(google_df[REGISTER_COLS])
+    if not extra.empty:
+        parts.append(extra[REGISTER_COLS])
+
+    combined = pd.concat(parts, ignore_index=True)
     combined["ticker"] = combined["ticker"].astype(str).str.upper()
+    combined["yf_ticker"] = combined["yf_ticker"].astype(str).str.upper()
     combined = combined.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
     return combined
 
@@ -153,6 +168,146 @@ def build_csv_line_from_row(row, category=None):
             s = '"' + s.replace('"', '""') + '"'
         return s
     return ",".join(clean(v) for v in values)
+
+
+# -----------------------------
+# Googleスプレッドシート永久保存
+# Streamlit Secretsに GOOGLE_SHEET_ID と gcp_service_account を設定すると有効
+# -----------------------------
+def google_sheet_enabled():
+    try:
+        return bool(st.secrets.get("GOOGLE_SHEET_ID", "")) and gspread is not None and Credentials is not None
+    except Exception:
+        return False
+
+def get_google_sheet_id():
+    try:
+        return st.secrets.get("GOOGLE_SHEET_ID", "")
+    except Exception:
+        return ""
+
+def get_service_account_info():
+    try:
+        if "gcp_service_account" in st.secrets:
+            return dict(st.secrets["gcp_service_account"])
+        raw = st.secrets.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+        if raw:
+            return json.loads(raw)
+    except Exception:
+        return None
+    return None
+
+@st.cache_resource
+def get_gspread_worksheet():
+    if not google_sheet_enabled():
+        return None
+
+    info = get_service_account_info()
+    if not info:
+        return None
+
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = Credentials.from_service_account_info(info, scopes=scopes)
+    client = gspread.authorize(creds)
+    spreadsheet = client.open_by_key(get_google_sheet_id())
+
+    try:
+        ws = spreadsheet.worksheet("stocks")
+    except Exception:
+        ws = spreadsheet.add_worksheet(title="stocks", rows=1000, cols=len(REGISTER_COLS))
+
+    # ヘッダーが無ければ作る
+    try:
+        header = ws.row_values(1)
+        if header != REGISTER_COLS:
+            if not header:
+                ws.append_row(REGISTER_COLS)
+            else:
+                ws.update("A1:J1", [REGISTER_COLS])
+    except Exception:
+        pass
+
+    return ws
+
+@st.cache_data(ttl=60)
+def load_google_sheet_stocks():
+    ws = get_gspread_worksheet()
+    if ws is None:
+        return pd.DataFrame(columns=REGISTER_COLS)
+
+    try:
+        records = ws.get_all_records()
+        if not records:
+            return pd.DataFrame(columns=REGISTER_COLS)
+
+        out = pd.DataFrame(records)
+        for col in REGISTER_COLS:
+            if col not in out.columns:
+                out[col] = ""
+        out = out[REGISTER_COLS]
+        out["ticker"] = out["ticker"].astype(str).str.upper()
+        out["yf_ticker"] = out["yf_ticker"].astype(str).str.upper()
+        return out
+    except Exception:
+        return pd.DataFrame(columns=REGISTER_COLS)
+
+def save_stock_to_google_sheet(row, category=None):
+    ws = get_gspread_worksheet()
+    if ws is None:
+        return False, "Googleスプレッドシート未設定"
+
+    ticker = str(row.get("ticker", "")).upper().strip()
+    if not ticker:
+        return False, "ティッカーが空です"
+
+    final_category = str(category or row.get("category", "未分類") or "未分類")
+    values = [
+        ticker,
+        str(row.get("yf_ticker", ticker)).upper().strip(),
+        str(row.get("company", ticker)).strip(),
+        final_category,
+        str(row.get("business", "")).replace("\n", " ").strip(),
+        str(row.get("ai_relation", "")).replace("\n", " ").strip(),
+        str(row.get("ai_score", 3)),
+        str(row.get("keywords", "")).replace("\n", " ").strip(),
+        str(row.get("related", "")).replace("\n", " ").strip(),
+        str(row.get("official_ir_url", "")).strip(),
+    ]
+
+    try:
+        tickers = [x.upper() for x in ws.col_values(1)]
+        if ticker in tickers:
+            row_no = tickers.index(ticker) + 1
+            ws.update(f"A{row_no}:J{row_no}", [values])
+            load_google_sheet_stocks.clear()
+            return True, "Googleスプレッドシートの既存行を更新しました"
+        else:
+            ws.append_row(values)
+            load_google_sheet_stocks.clear()
+            return True, "Googleスプレッドシートに追加しました"
+    except Exception as e:
+        return False, f"保存エラー：{e}"
+
+def delete_stock_from_google_sheet(ticker):
+    ws = get_gspread_worksheet()
+    if ws is None:
+        return False, "Googleスプレッドシート未設定"
+
+    ticker = str(ticker).upper().strip()
+    try:
+        tickers = [x.upper() for x in ws.col_values(1)]
+        if ticker in tickers:
+            row_no = tickers.index(ticker) + 1
+            if row_no > 1:
+                ws.delete_rows(row_no)
+                load_google_sheet_stocks.clear()
+                return True, f"{ticker} をGoogleスプレッドシートから削除しました"
+        return False, "対象銘柄が見つかりません"
+    except Exception as e:
+        return False, f"削除エラー：{e}"
 
 # -----------------------------
 # 表示ユーティリティ
@@ -2370,7 +2525,11 @@ def show_register_box(row):
     if st.button("この銘柄をAI関連図に登録", key=f"reg_btn_{row['ticker']}", use_container_width=True):
         add_favorite_stock(row["ticker"], row["company"], final_cat)
         add_registered_extra_stock(row, final_cat)
-        st.success(f'{row["ticker"]} を「{final_cat}」に登録しました。AI関連図と登録銘柄一覧で確認できます。')
+        saved, msg = save_stock_to_google_sheet(row, final_cat)
+        if saved:
+            st.success(f'{row["ticker"]} を「{final_cat}」に永久保存しました。AI関連図と登録銘柄一覧で確認できます。')
+        else:
+            st.warning(f'{row["ticker"]} を一時登録しました。永久保存は未完了：{msg}')
 
     if bool(row.get("_virtual", False)):
         st.markdown("### 📋 stocks.csvに追加する行")
@@ -2446,7 +2605,11 @@ def show_stock_page(row):
     if fav_clicked:
         add_favorite_stock(row["ticker"], display_company_name, display_category)
         add_registered_extra_stock(row, display_category)
-        st.success(f'{row["ticker"]} を「{display_category}」にお気に入り登録し、登録銘柄一覧にも追加しました。')
+        saved, msg = save_stock_to_google_sheet(row, display_category)
+        if saved:
+            st.success(f'{row["ticker"]} を「{display_category}」に永久保存しました。{msg}')
+        else:
+            st.warning(f'{row["ticker"]} を一時登録しました。永久保存は未完了：{msg}')
 
     if search_clicked:
         sync_ticker_input()
@@ -2548,7 +2711,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v30</div>
+            <div class="hero-title-main">AI関連株コード辞典 v31</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2561,7 +2724,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v30</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v31</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -2641,6 +2804,26 @@ elif mode == "全銘柄一覧":
     all_df = get_all_registered_df()
     st.dataframe(all_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]], use_container_width=True, hide_index=True)
 
+    google_df = load_google_sheet_stocks()
+    if google_sheet_enabled():
+        st.success(f"Googleスプレッドシート保存：有効 / 保存済み {len(google_df)} 銘柄")
+    else:
+        st.warning("Googleスプレッドシート保存：未設定です。Secretsを設定すると永久保存できます。")
+
+    if not google_df.empty:
+        st.markdown("### ✅ Googleスプレッドシートに永久保存済み")
+        st.dataframe(google_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
+
+        target_g = st.selectbox("Google保存から削除する銘柄", google_df["ticker"].tolist())
+        if st.button("選択した銘柄をGoogle保存から削除", use_container_width=True):
+            ok, msg = delete_stock_from_google_sheet(target_g)
+            if ok:
+                remove_favorite_stock(target_g)
+                st.success(msg)
+                st.rerun()
+            else:
+                st.warning(msg)
+
     extra_df = get_registered_extra_df()
     if not extra_df.empty:
         st.markdown("### ⭐ 今回お気に入り登録で追加した銘柄")
@@ -2656,7 +2839,7 @@ elif mode == "全銘柄一覧":
         st.markdown("### 📋 stocks.csvへ追記するCSV")
         csv_lines = "\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
         st.code(csv_lines, language="csv")
-        st.caption("このCSVを stocks.csv に追記すると、再起動後も残せます。次はGoogleスプレッドシート保存型にできます。")
+        st.caption("Googleスプレッドシート未設定の場合、このCSVを stocks.csv に追記すると再起動後も残せます。")
 
 elif mode == "API設定確認":
     st.subheader("API設定確認")
@@ -2678,6 +2861,37 @@ elif mode == "API設定確認":
         """
     )
 
+
+    st.markdown("---")
+    st.subheader("Googleスプレッドシート永久保存")
+    st.write("GOOGLE_SHEET_ID:", "設定済み" if get_google_sheet_id() else "未設定")
+    st.write("gcp_service_account:", "設定済み" if get_service_account_info() else "未設定")
+    st.write("gspread:", "使用可能" if gspread is not None else "未インストール")
+
+    st.markdown(
+        """
+        ### Googleスプレッドシート保存を有効にするSecrets例
+
+        ```toml
+        GOOGLE_SHEET_ID = "GoogleスプレッドシートID"
+
+        [gcp_service_account]
+        type = "service_account"
+        project_id = "..."
+        private_key_id = "..."
+        private_key = "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
+        client_email = "..."
+        client_id = "..."
+        auth_uri = "https://accounts.google.com/o/oauth2/auth"
+        token_uri = "https://oauth2.googleapis.com/token"
+        auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+        client_x509_cert_url = "..."
+        ```
+
+        Googleスプレッドシート側では、サービスアカウントの `client_email` に編集権限を付けてください。
+        シート名は `stocks` を使います。無ければ自動作成します。
+        """
+    )
 st.markdown("---")
 with st.expander("🛠 銘柄データの追加・修正方法"):
     st.markdown(

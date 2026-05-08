@@ -1,3 +1,34 @@
+# AI関連株コード辞典 v31 Google Sheets Persistence
+
+## v31で追加した内容
+- お気に入り登録した銘柄をGoogleスプレッドシートに永久保存
+- アプリ再起動後もGoogleスプレッドシートから登録銘柄一覧へ反映
+- Google保存済み銘柄の一覧表示
+- Google保存からの削除
+- Google未設定時は、従来通りセッション内一時保存で動作
+
+## 必要なSecrets
+Streamlit Cloud > App > Settings > Secrets に以下を設定します。
+
+```toml
+GOOGLE_SHEET_ID = "GoogleスプレッドシートID"
+
+[gcp_service_account]
+type = "service_account"
+project_id = "..."
+private_key_id = "..."
+private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+client_email = "..."
+client_id = "..."
+auth_uri = "https://accounts.google.com/o/oauth2/auth"
+token_uri = "https://oauth2.googleapis.com/token"
+auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
+client_x509_cert_url = "..."
+```
+
+Googleスプレッドシート側で、サービスアカウントの `client_email` に編集権限を付けてください。
+シート名は `stocks` を使います。無ければ自動作成します。
+
 # AI関連株コード辞典 v30 Favorite to Registered List
 
 ## v30で追加した内容

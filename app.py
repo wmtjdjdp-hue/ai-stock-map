@@ -8,10 +8,10 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 
-st.set_page_config(page_title="AI関連株コード辞典 v15", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v16", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v15 Clean
+# AI関連株コード辞典 v16 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -237,6 +237,105 @@ def get_yf_history(yf_ticker, period):
     except Exception:
         return pd.DataFrame()
 
+
+# -----------------------------
+# Yahoo Finance Search fallback
+# APIキーなしで会社名を補完するための検索エンドポイント。
+# 特に T / D / ARM など、yfinance infoが返らない時の会社名補完に使う。
+# -----------------------------
+COMMON_TICKER_FALLBACK = {
+    "T": {
+        "company": "AT&T Inc.",
+        "sector": "Communication Services",
+        "industry": "Telecom Services",
+        "description": "AT&T Inc. is a telecommunications company providing wireless, broadband, and communications services.",
+    },
+    "D": {
+        "company": "Dominion Energy, Inc.",
+        "sector": "Utilities",
+        "industry": "Utilities - Regulated Electric",
+        "description": "Dominion Energy, Inc. is an energy and utility company involved in electricity and natural gas infrastructure.",
+    },
+    "ARM": {
+        "company": "Arm Holdings plc",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "description": "Arm Holdings plc licenses CPU architecture and semiconductor IP used in mobile, edge, cloud, and AI-related chips.",
+    },
+    "AAPL": {
+        "company": "Apple Inc.",
+        "sector": "Technology",
+        "industry": "Consumer Electronics",
+        "description": "Apple Inc. designs devices, software, services, and silicon platforms with growing AI features across its ecosystem.",
+    },
+    "MSFT": {
+        "company": "Microsoft Corporation",
+        "sector": "Technology",
+        "industry": "Software - Infrastructure",
+        "description": "Microsoft Corporation provides cloud, software, productivity platforms, and AI services through Azure and Copilot.",
+    },
+    "GOOGL": {
+        "company": "Alphabet Inc.",
+        "sector": "Communication Services",
+        "industry": "Internet Content & Information",
+        "description": "Alphabet Inc. operates Google, cloud services, advertising platforms, and AI research/products.",
+    },
+}
+
+@st.cache_data(ttl=3600)
+def get_yahoo_search_data(symbol):
+    result = {
+        "company": "",
+        "sector": "",
+        "industry": "",
+        "description": "",
+        "currency": "",
+    }
+    s = str(symbol).upper().strip()
+
+    # 先に代表銘柄の安全な補完
+    if s in COMMON_TICKER_FALLBACK:
+        result.update(COMMON_TICKER_FALLBACK[s])
+
+    # Yahoo Financeの検索エンドポイントから会社名を補完
+    try:
+        url = "https://query2.finance.yahoo.com/v1/finance/search"
+        params = {"q": s, "quotesCount": 8, "newsCount": 0, "enableFuzzyQuery": False}
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, params=params, headers=headers, timeout=8)
+        if r.ok:
+            data = r.json()
+            quotes = data.get("quotes", [])
+            best = None
+
+            # 完全一致を優先
+            for q in quotes:
+                if str(q.get("symbol", "")).upper() == s:
+                    best = q
+                    break
+
+            # 完全一致が無ければ最初の株式候補
+            if best is None:
+                for q in quotes:
+                    if q.get("quoteType") in ["EQUITY", "ETF"]:
+                        best = q
+                        break
+
+            if best:
+                result["company"] = pick_first(
+                    best.get("longname"),
+                    best.get("shortname"),
+                    result.get("company"),
+                    ""
+                )
+                result["sector"] = pick_first(best.get("sector"), result.get("sector"), "")
+                result["industry"] = pick_first(best.get("industry"), result.get("industry"), "")
+                result["currency"] = pick_first(best.get("currency"), result.get("currency"), "")
+    except Exception:
+        pass
+
+    return result
+
 # -----------------------------
 # FMP
 # -----------------------------
@@ -383,6 +482,7 @@ def get_finnhub_data(symbol, api_key):
 def get_combined_data(yf_ticker, fmp_key, alpha_key, finnhub_key):
     yf_data = get_yf_data(yf_ticker)
     symbol = to_api_symbol(yf_ticker)
+    yahoo_search = get_yahoo_search_data(symbol) if symbol else {}
     fmp = get_fmp_data(symbol, fmp_key) if symbol else {}
     alpha = get_alpha_data(symbol, alpha_key) if symbol else {}
     finnhub = get_finnhub_data(symbol, finnhub_key) if symbol else {}
@@ -400,6 +500,7 @@ def get_combined_data(yf_ticker, fmp_key, alpha_key, finnhub_key):
                 ("FMP", fmp.get(k) if fmp else None),
                 ("Alpha Vantage", alpha.get(k) if alpha else None),
                 ("Finnhub", finnhub.get(k) if finnhub else None),
+                ("Yahoo Search", yahoo_search.get(k) if yahoo_search else None),
                 ("yfinance", yf_data.get(k)),
             ]
         else:
@@ -797,8 +898,8 @@ def show_stock_page(row):
 # -----------------------------
 # UI
 # -----------------------------
-st.markdown('<div class="main-title">AI関連株コード辞典 v15</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">未登録ティッカーでも、無料API/yfinanceから会社名・分類・業種・事業内容・AI仮関連メモを自動反映します。</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">AI関連株コード辞典 v16</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">未登録ティッカーでも、会社名をYahoo検索APIなどで補完して表示しやすくした版です。</div>', unsafe_allow_html=True)
 
 st.sidebar.title("🔎 操作メニュー")
 mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])

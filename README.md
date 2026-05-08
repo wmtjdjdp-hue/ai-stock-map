@@ -1,4 +1,12 @@
-# AI関連株コード辞典 v15 Clean Auto Profile
+# AI関連株コード辞典 v16 Company Name Fallback
+
+## v16で修正した内容
+- 未登録ティッカーで会社名が `T` のようにティッカーだけになる問題を改善
+- yfinanceで会社名が取れない場合、Yahoo Finance Search系の公開エンドポイントで会社名を補完
+- 代表的な銘柄 `T` / `D` / `ARM` / `AAPL` / `MSFT` / `GOOGL` はローカル補完も追加
+- 取得元表示に `Yahoo Search` が出る場合があります
+
+# AI関連株コード辞典 v16 Company Name Fallback
 
 ## v15で追加・整理したこと
 - 登録済み銘柄は stocks.csv の情報を優先表示

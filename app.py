@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v50", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v51", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v50 Clean
+# AI関連株コード辞典 v51 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -179,33 +179,33 @@ def open_ticker_from_button(ticker, return_to="全銘柄一覧"):
 
 def render_native_ai_map():
     """AI関連図をシンプルな6カテゴリ枠で表示する。
-    v49: Streamlitのcontainer(border=True)を使い、カテゴリ名とティッカーを確実に同じ枠内へ入れる。
+    v51: ティッカーコードだけを小さい枠で、カテゴリ内に横3つ並びで表示。
     """
     st.markdown("""
     <style>
     .simple-ai-title {
         text-align: center;
-        font-size: 56px;
+        font-size: 48px;
         font-weight: 950;
         line-height: 1.0;
         color: #050505;
         letter-spacing: 2px;
-        margin: 2px 0 14px 0;
+        margin: 0 0 10px 0;
     }
     .simple-map-caption {
-        font-size: 13px;
+        font-size: 12px;
         color: #64748b;
         font-weight: 700;
         text-align: center;
-        margin: 0 0 20px 0;
+        margin: 0 0 16px 0;
     }
     .cat-title-chip {
         text-align: center;
-        font-size: 26px;
+        font-size: 24px;
         font-weight: 950;
         color: #111827;
         border-radius: 12px;
-        padding: 8px 10px 9px 10px;
+        padding: 7px 8px 8px 8px;
         margin-bottom: 12px;
         letter-spacing: 1px;
     }
@@ -216,20 +216,22 @@ def render_native_ai_map():
     .cat-dc { background: #e8f8fb; }
     .cat-semi { background: #fdeaf1; }
 
-    /* AI関連図内のティッカー行ボタン */
+    /* AI関連図内のティッカー小枠 */
     div[data-testid="stButton"] > button[kind="secondary"] {
         width: 100%;
-        min-height: 34px;
-        border: 1.5px solid #cbd5e1;
-        border-radius: 10px;
+        min-height: 31px;
+        border: 1.3px solid #cbd5e1;
+        border-radius: 8px;
         background: #ffffff;
         color: #111827;
-        font-size: 16px;
+        font-size: 13px;
         font-weight: 900;
-        line-height: 1.05;
-        padding: 5px 8px;
+        line-height: 1.0;
+        padding: 3px 4px;
         margin: 0;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+        overflow: hidden;
+        white-space: nowrap;
     }
     div[data-testid="stButton"] > button[kind="secondary"]:hover {
         border-color: #2563eb;
@@ -238,17 +240,18 @@ def render_native_ai_map():
         transform: translateY(-1px);
     }
 
-    /* border=True containerを少し大きめの枠に見せる */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        border-radius: 22px !important;
-        border-color: #111827 !important;
+        border-radius: 20px !important;
+        border-color: #cbd5e1 !important;
+        background: #ffffff !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="simple-ai-title">AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="simple-map-caption">カテゴリ枠内のティッカー行を押すと、ティッカー検索ページで会社情報を表示します。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="simple-map-caption">カテゴリ枠内のティッカーコードを押すと、ティッカー検索ページで会社情報を表示します。</div>', unsafe_allow_html=True)
 
+    # 画像イメージに合わせた6カテゴリ。横3つ表示を前提に3件以上入れてもOK。
     category_layout = [
         ("GPU", "cat-gpu", ["NVDA", "AMD"]),
         ("メモリー", "cat-memory", ["MU", "000660.KS"]),
@@ -293,23 +296,26 @@ def render_native_ai_map():
     except Exception:
         pass
 
-    # 3列 × 2段。HTMLのdiv枠ではなく、Streamlitのcontainer(border=True)で本物の枠に入れる
+    # 3列 × 2段のカテゴリ枠
     for row_start in range(0, len(category_layout), 3):
-        cols = st.columns(3)
+        cat_cols = st.columns(3)
         for j, (cat, css_class, tickers) in enumerate(category_layout[row_start:row_start + 3]):
-            with cols[j]:
+            with cat_cols[j]:
                 with st.container(border=True):
                     st.markdown(f'<div class="cat-title-chip {css_class}">{cat}</div>', unsafe_allow_html=True)
 
-                    for idx, t in enumerate(tickers):
-                        t = str(t).upper().strip()
-                        company = info_map.get(t, {}).get("company", "")
-                        if not company:
-                            company = t
-
-                        label = t
-                        if st.button(label, key=f"simple_ai_open_{cat}_{t}_{idx}", use_container_width=True):
-                            open_ticker_from_button(t, return_to="AI関連図")
+                    # 枠内のティッカーを横3つ並びにする
+                    for ticker_start in range(0, len(tickers), 3):
+                        ticker_cols = st.columns(3)
+                        for k in range(3):
+                            idx = ticker_start + k
+                            with ticker_cols[k]:
+                                if idx < len(tickers):
+                                    t = str(tickers[idx]).upper().strip()
+                                    if st.button(t, key=f"simple_ai_open_{cat}_{t}_{idx}", use_container_width=True):
+                                        open_ticker_from_button(t, return_to="AI関連図")
+                                else:
+                                    st.write("")
 
         st.write("")
 
@@ -3132,7 +3138,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v50</div>
+            <div class="hero-title-main">AI関連株コード辞典 v51</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3185,7 +3191,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v50</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v51</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

@@ -1,3 +1,11 @@
+# AI関連株コード辞典 v38 Session Mode Fix
+
+## v38で修正した内容
+- 全銘柄一覧の「開く」ボタンで発生していたStreamlit session_stateエラーを修正
+- 左メニューのradio keyとページ切り替え用stateを分離
+- 「開く」ボタンはquery_params経由で安全にティッカー検索へ移動
+- v37の全銘柄一覧・カテゴリ統合・AI関連図クリック機能は維持
+
 # AI関連株コード辞典 v37 Open Buttons In Table
 
 ## v37で修正した内容

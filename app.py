@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v37", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v38", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v37 Clean
+# AI関連株コード辞典 v38 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -160,9 +160,10 @@ def open_ticker_from_button(ticker):
     if not t:
         return
     st.session_state.last_ticker = t
-    st.session_state.display_mode = "ティッカー検索"
+    # radio widgetの値を直接後から変えるとStreamlitエラーになるため、
+    # query_params経由で次回実行の先頭で切り替える
     try:
-        st.query_params.clear()
+        st.query_params["open_ticker"] = t
     except Exception:
         pass
 
@@ -177,6 +178,9 @@ def apply_query_open_ticker():
         if t:
             st.session_state.last_ticker = t
             st.session_state.display_mode = "ティッカー検索"
+            # radio側のkeyも次回作成前なら安全に合わせられる
+            if "display_mode_radio" in st.session_state:
+                del st.session_state["display_mode_radio"]
             try:
                 st.query_params.clear()
             except Exception:
@@ -2898,7 +2902,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v37</div>
+            <div class="hero-title-main">AI関連株コード辞典 v38</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2911,7 +2915,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v37</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v38</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -2922,13 +2926,26 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown('<div class="sidebar-menu-label">表示モード</div>', unsafe_allow_html=True)
+MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"]
+
 if "display_mode" not in st.session_state:
     st.session_state.display_mode = "ティッカー検索"
+
+# 外部ボタンから表示モードを変えられるように、radioのkeyは別名にする
+try:
+    default_mode_index = MODE_OPTIONS.index(st.session_state.display_mode)
+except Exception:
+    default_mode_index = 0
+
 mode = st.sidebar.radio(
     "表示モード",
-    ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"],
-    key="display_mode",
+    MODE_OPTIONS,
+    index=default_mode_index,
+    key="display_mode_radio",
 )
+
+st.session_state.display_mode = mode
+
 
 st.sidebar.markdown('<div class="sidebar-menu-label">チャート期間</div>', unsafe_allow_html=True)
 period_label = st.sidebar.selectbox("チャート期間", ["1ヶ月", "3ヶ月", "6ヶ月", "1年", "5年"], index=2)

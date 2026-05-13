@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v35", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v36", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v35 Clean
+# AI関連株コード辞典 v36 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -138,6 +138,52 @@ def get_persistent_favorites_df():
     out["yf_ticker"] = out["yf_ticker"].astype(str).str.upper()
     out = out.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
     return out
+
+
+def normalize_display_category(value):
+    """全銘柄一覧ではカテゴリ表示を1つにまとめる。"""
+    s = str(value or "未分類").strip()
+    if not s:
+        return "未分類"
+    # "A / B" のような複合分類は一番左を主カテゴリとして表示
+    if " / " in s:
+        s = s.split(" / ")[0].strip()
+    # "A｜B" や "A,B" のような入力も1つ目だけ表示
+    for sep in ["｜", "|", ",", "、"]:
+        if sep in s:
+            s = s.split(sep)[0].strip()
+    return s or "未分類"
+
+def open_ticker_from_button(ticker):
+    """一覧や関連図からティッカー検索ページへ移動する。"""
+    t = str(ticker or "").upper().strip()
+    if not t:
+        return
+    st.session_state.last_ticker = t
+    st.session_state.display_mode = "ティッカー検索"
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
+
+def apply_query_open_ticker():
+    """AI関連図HTMLのリンク ?open_ticker=XXX からティッカー検索へ移動する。"""
+    try:
+        q = st.query_params
+        t = q.get("open_ticker", "")
+        if isinstance(t, list):
+            t = t[0] if t else ""
+        t = str(t or "").upper().strip()
+        if t:
+            st.session_state.last_ticker = t
+            st.session_state.display_mode = "ティッカー検索"
+            try:
+                st.query_params.clear()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
 
 def add_registered_extra_stock(row, category=None):
     ticker = str(row.get("ticker", "")).upper().strip()
@@ -2453,11 +2499,13 @@ def make_mindmap_html(selected_ticker=None):
                 display = t
 
             active = " active" if selected in [display.upper(), t.upper()] else ""
+            safe_display = str(display).replace('"', '&quot;')
+            safe_name = str(name).replace('"', '&quot;')
             items.append(
-                '<div class="stock-node{}">'
+                '<a class="stock-node{}" href="?open_ticker={}" target="_self" title="{}を開く">'
                 '<div class="ticker">{}</div>'
                 '<div class="company">{}</div>'
-                '</div>'.format(active, display, name)
+                '</a>'.format(active, safe_display, safe_display, safe_display, safe_name)
             )
 
         block = (
@@ -2557,6 +2605,15 @@ def make_mindmap_html(selected_ticker=None):
         border-radius: 12px;
         padding: 9px 10px;
         min-width: 0;
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        cursor: pointer;
+    }
+    .stock-node:hover {
+        border-color: #2563eb;
+        background: #eff6ff;
+        transform: translateY(-1px);
     }
     .stock-node.active {
         border: 2px solid #f59e0b;
@@ -2841,7 +2898,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v35</div>
+            <div class="hero-title-main">AI関連株コード辞典 v36</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2854,7 +2911,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v35</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v36</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -2865,7 +2922,13 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown('<div class="sidebar-menu-label">表示モード</div>', unsafe_allow_html=True)
-mode = st.sidebar.radio("表示モード", ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"])
+if "display_mode" not in st.session_state:
+    st.session_state.display_mode = "ティッカー検索"
+mode = st.sidebar.radio(
+    "表示モード",
+    ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"],
+    key="display_mode",
+)
 
 st.sidebar.markdown('<div class="sidebar-menu-label">チャート期間</div>', unsafe_allow_html=True)
 period_label = st.sidebar.selectbox("チャート期間", ["1ヶ月", "3ヶ月", "6ヶ月", "1年", "5年"], index=2)
@@ -2917,22 +2980,71 @@ elif mode == "カテゴリ表示":
 
 elif mode == "AI関連図":
     st.subheader("🗺 AI関連図")
+    st.caption("関連図のティッカーコードを押すと、ティッカー検索ページでその銘柄を開きます。")
     components.html(make_mindmap_html(), height=980, scrolling=False)
-    st.subheader("⭐ 登録済みお気に入り")
-    fav_df = pd.DataFrame(st.session_state.favorite_stocks)
+
+    st.subheader("⭐ 保存済み・一時登録銘柄")
+    fav_df = get_persistent_favorites_df()
     if fav_df.empty:
         st.info("まだ登録された銘柄はありません。ティッカー検索から登録できます。")
     else:
-        st.dataframe(fav_df, use_container_width=True, hide_index=True)
-        target = st.selectbox("解除する銘柄", fav_df["ticker"].tolist())
-        if st.button("選択した銘柄を解除", use_container_width=True):
-            remove_favorite_stock(target)
-            st.success(f"{target} を解除しました。")
+        view_df = fav_df[["ticker", "company", "category", "business", "ai_score"]].copy()
+        view_df["category"] = view_df["category"].apply(normalize_display_category)
+        st.dataframe(view_df, use_container_width=True, hide_index=True)
+
+        st.markdown("#### 銘柄を開く")
+        cols = st.columns(4)
+        for i, (_, r) in enumerate(view_df.iterrows()):
+            t = str(r["ticker"]).upper()
+            label = f'{t}  {str(r.get("company", ""))[:14]}'
+            with cols[i % 4]:
+                if st.button(label, key=f"open_ai_{t}_{i}", use_container_width=True):
+                    open_ticker_from_button(t)
+                    st.rerun()
+
+        with st.expander("登録解除"):
+            target = st.selectbox("解除する銘柄", fav_df["ticker"].tolist())
+            if st.button("選択した銘柄を解除", use_container_width=True):
+                remove_favorite_stock(target)
+                remove_registered_extra_stock(target)
+                ok, msg = delete_stock_from_google_sheet(target)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.warning(msg)
+                st.rerun()
 
 elif mode == "全銘柄一覧":
     st.subheader("登録銘柄一覧")
+    st.caption("カテゴリ表示は1つにまとめています。ティッカーコードのボタンを押すと、ティッカー検索ページで開きます。")
+
     all_df = get_all_registered_df()
-    st.dataframe(all_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]], use_container_width=True, hide_index=True)
+    list_df = all_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]].copy()
+    list_df["category"] = list_df["category"].apply(normalize_display_category)
+    list_df = list_df.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
+
+    # 表示名を少し見やすくする
+    display_df = list_df.rename(columns={
+        "ticker": "ティッカー",
+        "yf_ticker": "Yahooコード",
+        "company": "会社名",
+        "category": "カテゴリ",
+        "business": "事業内容",
+        "ai_score": "AI関連度",
+        "official_ir_url": "IR URL",
+    })
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### ティッカーから開く")
+    cols = st.columns(5)
+    for i, (_, r) in enumerate(list_df.iterrows()):
+        t = str(r["ticker"]).upper()
+        company = str(r.get("company", ""))
+        label = f"{t}\\n{company[:12]}"
+        with cols[i % 5]:
+            if st.button(label, key=f"open_all_{t}_{i}", use_container_width=True):
+                open_ticker_from_button(t)
+                st.rerun()
 
     google_df = load_google_sheet_stocks()
     if google_sheet_enabled():
@@ -2940,36 +3052,43 @@ elif mode == "全銘柄一覧":
     else:
         st.warning("Googleスプレッドシート保存：未設定です。Secretsを設定すると永久保存できます。")
 
-    if not google_df.empty:
-        st.markdown("### ✅ Googleスプレッドシートに永久保存済み")
-        st.dataframe(google_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
+    with st.expander("Googleスプレッドシート保存済みの管理"):
+        if google_df.empty:
+            st.info("Googleスプレッドシートに保存済みの銘柄はありません。")
+        else:
+            gview = google_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]].copy()
+            gview["category"] = gview["category"].apply(normalize_display_category)
+            st.dataframe(gview, use_container_width=True, hide_index=True)
 
-        target_g = st.selectbox("Google保存から削除する銘柄", google_df["ticker"].tolist())
-        if st.button("選択した銘柄をGoogle保存から削除", use_container_width=True):
-            ok, msg = delete_stock_from_google_sheet(target_g)
-            if ok:
-                remove_favorite_stock(target_g)
-                st.success(msg)
-                st.rerun()
-            else:
-                st.warning(msg)
+            target_g = st.selectbox("Google保存から削除する銘柄", google_df["ticker"].tolist())
+            if st.button("選択した銘柄をGoogle保存から削除", use_container_width=True):
+                ok, msg = delete_stock_from_google_sheet(target_g)
+                if ok:
+                    remove_favorite_stock(target_g)
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.warning(msg)
 
     extra_df = get_registered_extra_df()
-    if not extra_df.empty:
-        st.markdown("### ⭐ 今回お気に入り登録で追加した銘柄")
-        st.dataframe(extra_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]], use_container_width=True, hide_index=True)
+    with st.expander("今回の一時登録とCSV追記用データ"):
+        if extra_df.empty:
+            st.info("今回の一時登録銘柄はありません。")
+        else:
+            eview = extra_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score"]].copy()
+            eview["category"] = eview["category"].apply(normalize_display_category)
+            st.dataframe(eview, use_container_width=True, hide_index=True)
 
-        target = st.selectbox("一時登録を解除する銘柄", extra_df["ticker"].tolist())
-        if st.button("選択した一時登録を解除", use_container_width=True):
-            remove_registered_extra_stock(target)
-            remove_favorite_stock(target)
-            st.success(f"{target} を一時登録から解除しました。")
-            st.rerun()
+            target = st.selectbox("一時登録を解除する銘柄", extra_df["ticker"].tolist())
+            if st.button("選択した一時登録を解除", use_container_width=True):
+                remove_registered_extra_stock(target)
+                remove_favorite_stock(target)
+                st.success(f"{target} を一時登録から解除しました。")
+                st.rerun()
 
-        st.markdown("### 📋 stocks.csvへ追記するCSV")
-        csv_lines = "\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
-        st.code(csv_lines, language="csv")
-        st.caption("Googleスプレッドシート未設定の場合、このCSVを stocks.csv に追記すると再起動後も残せます。")
+            st.markdown("### 📋 stocks.csvへ追記するCSV")
+            csv_lines = "\\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
+            st.code(csv_lines, language="csv")
 
 elif mode == "API設定確認":
     st.subheader("API設定確認")

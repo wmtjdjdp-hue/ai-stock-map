@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v45", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v46", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v45 Clean
+# AI関連株コード辞典 v46 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -175,6 +175,126 @@ def open_ticker_from_button(ticker, return_to="全銘柄一覧"):
     except Exception:
         pass
     st.rerun()
+
+
+def render_native_ai_map():
+    """AI関連図をStreamlit本体のボタンで描画する。
+    components.htmlのiframeを使わないので、全銘柄一覧と同じクリック移動ができる。
+    """
+    st.markdown("""
+    <style>
+    .native-ai-hub {
+        border: 1px solid #dbeafe;
+        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+        border-radius: 18px;
+        padding: 16px 18px;
+        margin: 8px 0 14px 0;
+        box-shadow: 0 8px 22px rgba(37, 99, 235, 0.08);
+    }
+    .native-ai-title {
+        font-size: 26px;
+        font-weight: 900;
+        color: #0f172a;
+        margin-bottom: 4px;
+    }
+    .native-ai-sub {
+        font-size: 13px;
+        color: #64748b;
+        font-weight: 700;
+    }
+    .native-cat-card {
+        border: 1px solid #e5e7eb;
+        background: #ffffff;
+        border-radius: 15px;
+        padding: 12px 12px 10px 12px;
+        margin-bottom: 12px;
+        min-height: 154px;
+        box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+    }
+    .native-cat-title {
+        font-size: 15px;
+        font-weight: 900;
+        color: #1f2937;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #eef2f7;
+        padding-bottom: 6px;
+    }
+    div[data-testid="stButton"] > button {
+        min-height: 38px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="native-ai-hub">
+        <div class="native-ai-title">AI 関連図</div>
+        <div class="native-ai-sub">ティッカーアイコンを押すと、全銘柄一覧と同じ機能でティッカー検索ページへ移動します。</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # 基本カテゴリ
+    base_categories = [
+        ("GPU", ["NVDA", "AMD"]),
+        ("メモリー", ["MU", "000660.KS"]),
+        ("冷却", ["VRT", "TT", "JCI"]),
+        ("電力", ["ETN", "HUBB", "PWR", "CEG", "SMR", "VST"]),
+        ("データセンター", ["DLR", "EQIX"]),
+        ("半導体製造", ["ASML", "AMAT", "LRCX"]),
+        ("素材", ["FCX", "SCCO", "ALB"]),
+        ("日本AI関連", ["7203.T", "9984.T", "6857.T"]),
+    ]
+
+    all_info = get_all_registered_df()
+    info_map = {}
+    try:
+        for _, r in all_info.iterrows():
+            info_map[str(r.get("ticker", "")).upper()] = {
+                "company": str(r.get("company", "")),
+                "category": normalize_display_category(r.get("category", "")),
+            }
+    except Exception:
+        pass
+
+    category_map = {cat: list(tickers) for cat, tickers in base_categories}
+
+    # Google保存済み・一時登録もカテゴリに追加
+    try:
+        fav_df = get_persistent_favorites_df()
+        if not fav_df.empty:
+            for _, r in fav_df.iterrows():
+                t = str(r.get("ticker", "")).upper().strip()
+                cat = normalize_display_category(r.get("category", "未分類"))
+                if not t:
+                    continue
+                if cat not in category_map:
+                    category_map[cat] = []
+                if t not in category_map[cat]:
+                    category_map[cat].append(t)
+                info_map[t] = {
+                    "company": str(r.get("company", "")),
+                    "category": cat,
+                }
+    except Exception:
+        pass
+
+    cats = list(category_map.keys())
+    # 4列で関連図っぽく表示
+    for row_start in range(0, len(cats), 4):
+        cols = st.columns(4)
+        for j, cat in enumerate(cats[row_start:row_start + 4]):
+            with cols[j]:
+                st.markdown(f'<div class="native-cat-card"><div class="native-cat-title">🏷 {cat}</div>', unsafe_allow_html=True)
+                tickers = category_map.get(cat, [])
+                for idx, t in enumerate(tickers):
+                    t = str(t).upper().strip()
+                    company = info_map.get(t, {}).get("company", "")
+                    label = f"{t}"
+                    if company:
+                        label += f"\n{company[:14]}"
+                    if st.button(label, key=f"native_ai_open_{cat}_{t}_{idx}", use_container_width=True):
+                        open_ticker_from_button(t, return_to="AI関連図")
+                st.markdown('</div>', unsafe_allow_html=True)
+
 
 def return_to_previous_mode():
     """ティッカー検索から元の画面へ戻る。"""
@@ -2995,7 +3115,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v45</div>
+            <div class="hero-title-main">AI関連株コード辞典 v46</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3048,7 +3168,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v45</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v46</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3135,8 +3255,8 @@ elif mode == "カテゴリ表示":
 
 elif mode == "AI関連図":
     st.subheader("🗺 AI関連図")
-    st.caption("関連図内のティッカーコード横の「開く」を押すと、ティッカー検索ページで会社情報を表示します。")
-    components.html(make_mindmap_html(), height=980, scrolling=False)
+    st.caption("AI関連図のティッカーアイコンを押すと、ティッカー検索ページで会社情報を表示します。")
+    render_native_ai_map()
 
     fav_df = get_persistent_favorites_df()
     st.subheader("⭐ 保存済み・一時登録銘柄")

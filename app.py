@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v46", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v47", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v46 Clean
+# AI関連株コード辞典 v47 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -178,61 +178,85 @@ def open_ticker_from_button(ticker, return_to="全銘柄一覧"):
 
 
 def render_native_ai_map():
-    """AI関連図をStreamlit本体のボタンで描画する。
-    components.htmlのiframeを使わないので、全銘柄一覧と同じクリック移動ができる。
+    """AI関連図をStreamlit本体のクリック機能で描画する。
+    機能はv46のまま、見た目だけv45の関連図カードに近づける。
     """
     st.markdown("""
     <style>
-    .native-ai-hub {
-        border: 1px solid #dbeafe;
-        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+    .native-map-shell {
+        border: 1px solid #e2e8f0;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
         border-radius: 18px;
-        padding: 16px 18px;
+        padding: 18px 18px 14px 18px;
         margin: 8px 0 14px 0;
-        box-shadow: 0 8px 22px rgba(37, 99, 235, 0.08);
+        box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
     }
-    .native-ai-title {
-        font-size: 26px;
+    .native-map-title {
+        font-size: 25px;
         font-weight: 900;
-        color: #0f172a;
+        color: #1f2937;
         margin-bottom: 4px;
     }
-    .native-ai-sub {
+    .native-map-sub {
         font-size: 13px;
         color: #64748b;
         font-weight: 700;
+        margin-bottom: 12px;
     }
     .native-cat-card {
-        border: 1px solid #e5e7eb;
+        border: 1px solid #dbe4ef;
         background: #ffffff;
         border-radius: 15px;
         padding: 12px 12px 10px 12px;
         margin-bottom: 12px;
-        min-height: 154px;
-        box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04);
+        min-height: 160px;
+        box-shadow: 0 3px 14px rgba(15, 23, 42, 0.045);
     }
     .native-cat-title {
         font-size: 15px;
         font-weight: 900;
-        color: #1f2937;
-        margin-bottom: 8px;
-        border-bottom: 1px solid #eef2f7;
-        padding-bottom: 6px;
+        color: #334155;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #edf2f7;
+        padding-bottom: 7px;
     }
-    div[data-testid="stButton"] > button {
-        min-height: 38px;
+    .native-hint {
+        font-size: 12px;
+        color: #64748b;
+        font-weight: 700;
+        margin-top: -2px;
+        margin-bottom: 10px;
+    }
+
+    /* AI関連図内のボタンだけ、v45のノードっぽく見せる */
+    div[data-testid="stButton"] > button[kind="secondary"] {
+        border: 1px solid #dbe4ef;
+        background: #f8fafc;
+        color: #0f172a;
+        border-radius: 12px;
+        padding: 8px 10px;
+        min-height: 46px;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.12;
+        box-shadow: none;
+    }
+    div[data-testid="stButton"] > button[kind="secondary"]:hover {
+        border-color: #2563eb;
+        background: #eff6ff;
+        color: #1d4ed8;
+        transform: translateY(-1px);
     }
     </style>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div class="native-ai-hub">
-        <div class="native-ai-title">AI 関連図</div>
-        <div class="native-ai-sub">ティッカーアイコンを押すと、全銘柄一覧と同じ機能でティッカー検索ページへ移動します。</div>
+    <div class="native-map-shell">
+        <div class="native-map-title">AI 関連図</div>
+        <div class="native-map-sub">ティッカーアイコンを押すと、ティッカー検索ページで会社情報を表示します。</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # 基本カテゴリ
     base_categories = [
         ("GPU", ["NVDA", "AMD"]),
         ("メモリー", ["MU", "000660.KS"]),
@@ -257,7 +281,6 @@ def render_native_ai_map():
 
     category_map = {cat: list(tickers) for cat, tickers in base_categories}
 
-    # Google保存済み・一時登録もカテゴリに追加
     try:
         fav_df = get_persistent_favorites_df()
         if not fav_df.empty:
@@ -278,23 +301,26 @@ def render_native_ai_map():
         pass
 
     cats = list(category_map.keys())
-    # 4列で関連図っぽく表示
+
     for row_start in range(0, len(cats), 4):
         cols = st.columns(4)
         for j, cat in enumerate(cats[row_start:row_start + 4]):
             with cols[j]:
-                st.markdown(f'<div class="native-cat-card"><div class="native-cat-title">🏷 {cat}</div>', unsafe_allow_html=True)
+                st.markdown('<div class="native-cat-card">', unsafe_allow_html=True)
+                st.markdown(f'<div class="native-cat-title">🏷 {cat}</div>', unsafe_allow_html=True)
+
                 tickers = category_map.get(cat, [])
                 for idx, t in enumerate(tickers):
                     t = str(t).upper().strip()
                     company = info_map.get(t, {}).get("company", "")
-                    label = f"{t}"
+                    # v45風：ティッカーが上、会社名が下に見えるように改行
+                    label = t
                     if company:
-                        label += f"\n{company[:14]}"
+                        label += f"\n{company[:16]}"
                     if st.button(label, key=f"native_ai_open_{cat}_{t}_{idx}", use_container_width=True):
                         open_ticker_from_button(t, return_to="AI関連図")
-                st.markdown('</div>', unsafe_allow_html=True)
 
+                st.markdown('</div>', unsafe_allow_html=True)
 
 def return_to_previous_mode():
     """ティッカー検索から元の画面へ戻る。"""
@@ -3115,7 +3141,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v46</div>
+            <div class="hero-title-main">AI関連株コード辞典 v47</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3168,7 +3194,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v46</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v47</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

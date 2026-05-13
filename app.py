@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v49", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v50", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v49 Clean
+# AI関連株コード辞典 v50 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -201,12 +201,12 @@ def render_native_ai_map():
     }
     .cat-title-chip {
         text-align: center;
-        font-size: 28px;
+        font-size: 26px;
         font-weight: 950;
         color: #111827;
         border-radius: 12px;
         padding: 8px 10px 9px 10px;
-        margin-bottom: 16px;
+        margin-bottom: 12px;
         letter-spacing: 1px;
     }
     .cat-gpu { background: #eaf3ff; }
@@ -219,15 +219,15 @@ def render_native_ai_map():
     /* AI関連図内のティッカー行ボタン */
     div[data-testid="stButton"] > button[kind="secondary"] {
         width: 100%;
-        min-height: 46px;
+        min-height: 34px;
         border: 1.5px solid #cbd5e1;
-        border-radius: 12px;
+        border-radius: 10px;
         background: #ffffff;
         color: #111827;
-        font-size: 15px;
-        font-weight: 800;
-        line-height: 1.15;
-        padding: 8px 10px;
+        font-size: 16px;
+        font-weight: 900;
+        line-height: 1.05;
+        padding: 5px 8px;
         margin: 0;
         box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
     }
@@ -307,7 +307,7 @@ def render_native_ai_map():
                         if not company:
                             company = t
 
-                        label = f"{t}　{company}"
+                        label = t
                         if st.button(label, key=f"simple_ai_open_{cat}_{t}_{idx}", use_container_width=True):
                             open_ticker_from_button(t, return_to="AI関連図")
 
@@ -3132,7 +3132,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v49</div>
+            <div class="hero-title-main">AI関連株コード辞典 v50</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3185,7 +3185,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v49</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v50</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v43", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v44", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v43 Clean
+# AI関連株コード辞典 v44 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -2690,22 +2690,25 @@ def make_mindmap_html(selected_ticker=None):
         const t = encodeURIComponent(String(ticker || "").trim().toUpperCase());
         if (!t) return;
 
-        const query = "?open_ticker=" + t + "&from=ai";
+        // iframe内にStreamlitアプリを読み込ませない。
+        // 親ページのURLだけを書き換えて、親側のStreamlitに読み取らせる。
+        const newHash = "#open_ticker=" + t + "&from=ai";
 
         try {
-            // Streamlit components.html はiframe内で動くため、親ページ側へURL変更を命令する
             if (window.parent && window.parent !== window) {
-                window.parent.location.href = window.parent.location.pathname + query;
+                window.parent.location.hash = newHash;
+                window.parent.postMessage({type: "open_ticker", ticker: t, from: "ai"}, "*");
                 return;
             }
         } catch (e) {}
 
         try {
-            window.top.location.href = window.top.location.pathname + query;
+            window.top.location.hash = newHash;
+            window.top.postMessage({type: "open_ticker", ticker: t, from: "ai"}, "*");
             return;
         } catch (e) {}
 
-        window.location.href = query;
+        window.location.hash = newHash;
     }
     </script>
     </head>
@@ -2956,13 +2959,51 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v43</div>
+            <div class="hero-title-main">AI関連株コード辞典 v44</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
     ''',
     unsafe_allow_html=True,
 )
+
+
+st.markdown("""
+<script>
+(function() {
+  function syncHashToQuery() {
+    try {
+      const hash = window.location.hash || "";
+      if (!hash.startsWith("#open_ticker=")) return;
+      const params = new URLSearchParams(hash.slice(1));
+      const t = params.get("open_ticker");
+      const src = params.get("from") || "ai";
+      if (!t) return;
+      const url = new URL(window.location.href);
+      url.hash = "";
+      url.searchParams.set("open_ticker", t);
+      url.searchParams.set("from", src);
+      window.location.replace(url.toString());
+    } catch(e) {}
+  }
+  syncHashToQuery();
+  window.addEventListener("hashchange", syncHashToQuery);
+  window.addEventListener("message", function(ev) {
+    try {
+      if (!ev.data || ev.data.type !== "open_ticker") return;
+      const t = ev.data.ticker;
+      const src = ev.data.from || "ai";
+      if (!t) return;
+      const url = new URL(window.location.href);
+      url.hash = "";
+      url.searchParams.set("open_ticker", t);
+      url.searchParams.set("from", src);
+      window.location.replace(url.toString());
+    } catch(e) {}
+  });
+})();
+</script>
+""", unsafe_allow_html=True)
 
 apply_query_open_ticker()
 
@@ -2971,7 +3012,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v43</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v44</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

@@ -1,3 +1,21 @@
+# AI関連株コード辞典 v43 Mindmap Direct Click
+
+## v43で修正した内容
+- AI関連図の表示はそのまま維持
+- AI関連図のティッカーコード自体を押すと、裏でティッカー検索ページへ移動するように変更
+- 「関連図から開く」ボタン一覧を削除
+- components.html の iframe 内から親Streamlitページへ移動するJavaScript処理を追加
+- AI関連図から移動した時は「AI関連図へ戻る」ボタンを表示
+
+# AI関連株コード辞典 v42 AI Mindmap Open Buttons
+
+## v42で修正した内容
+- AI関連図のHTML/iframeリンクが親のStreamlitアプリに届かない問題を回避
+- AI関連図の下に「関連図から開く」ボタン一覧を追加
+- ボタンは全銘柄一覧と同じStreamlit処理でティッカー検索ページへ移動
+- AI関連図から移動した場合は「AI関連図へ戻る」ボタンを表示
+- 全銘柄一覧の戻る機能はv41のまま維持
+
 # AI関連株コード辞典 v41 Return Buttons
 
 ## v41で修正した内容

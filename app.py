@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v41", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v43", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v41 Clean
+# AI関連株コード辞典 v43 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -2535,10 +2535,10 @@ def make_mindmap_html(selected_ticker=None):
             safe_display = str(display).replace('"', '&quot;')
             safe_name = str(name).replace('"', '&quot;')
             items.append(
-                '<a class="stock-node{}" href="?open_ticker={}&from=ai" target="_top" title="{}を開く">'
+                '<div class="stock-node{}" onclick="openTicker(\'{}\')" title="{}を開く">'
                 '<div class="ticker">{}</div>'
                 '<div class="company">{}</div>'
-                '</a>'.format(active, safe_display, safe_display, safe_display, safe_name)
+                '</div>'.format(active, safe_display, safe_display, safe_display, safe_name)
             )
 
         block = (
@@ -2642,6 +2642,7 @@ def make_mindmap_html(selected_ticker=None):
         text-decoration: none;
         color: inherit;
         cursor: pointer;
+        user-select: none;
     }
     .stock-node:hover {
         border-color: #2563eb;
@@ -2683,6 +2684,30 @@ def make_mindmap_html(selected_ticker=None):
         }
     }
     </style>
+
+    <script>
+    function openTicker(ticker) {
+        const t = encodeURIComponent(String(ticker || "").trim().toUpperCase());
+        if (!t) return;
+
+        const query = "?open_ticker=" + t + "&from=ai";
+
+        try {
+            // Streamlit components.html はiframe内で動くため、親ページ側へURL変更を命令する
+            if (window.parent && window.parent !== window) {
+                window.parent.location.href = window.parent.location.pathname + query;
+                return;
+            }
+        } catch (e) {}
+
+        try {
+            window.top.location.href = window.top.location.pathname + query;
+            return;
+        } catch (e) {}
+
+        window.location.href = query;
+    }
+    </script>
     </head>
     <body>
         <div class="map-wrap">
@@ -2931,7 +2956,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v41</div>
+            <div class="hero-title-main">AI関連株コード辞典 v43</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2946,7 +2971,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v41</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v43</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3033,26 +3058,17 @@ elif mode == "カテゴリ表示":
 
 elif mode == "AI関連図":
     st.subheader("🗺 AI関連図")
-    st.caption("関連図のティッカーコードを押すと、ティッカー検索ページでその銘柄を開きます。")
+    st.caption("関連図内のティッカーコードを押すと、ティッカー検索ページで会社情報を表示します。")
     components.html(make_mindmap_html(), height=980, scrolling=False)
 
-    st.subheader("⭐ 保存済み・一時登録銘柄")
     fav_df = get_persistent_favorites_df()
+    st.subheader("⭐ 保存済み・一時登録銘柄")
     if fav_df.empty:
         st.info("まだ登録された銘柄はありません。ティッカー検索から登録できます。")
     else:
         view_df = fav_df[["ticker", "company", "category", "business", "ai_score"]].copy()
         view_df["category"] = view_df["category"].apply(normalize_display_category)
         st.dataframe(view_df, use_container_width=True, hide_index=True)
-
-        st.markdown("#### 銘柄を開く")
-        cols = st.columns(4)
-        for i, (_, r) in enumerate(view_df.iterrows()):
-            t = str(r["ticker"]).upper()
-            label = f'{t}  {str(r.get("company", ""))[:14]}'
-            with cols[i % 4]:
-                if st.button(label, key=f"open_ai_{t}_{i}", use_container_width=True):
-                    open_ticker_from_button(t, return_to="AI関連図")
 
         with st.expander("登録解除"):
             target = st.selectbox("解除する銘柄", fav_df["ticker"].tolist())

@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v44", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v45", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v44 Clean
+# AI関連株コード辞典 v45 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -2463,6 +2463,30 @@ st.markdown(
             grid-template-columns: 1fr !important;
         }
     }
+
+    .ticker-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+    .mini-open {
+        border: 1px solid #bfdbfe;
+        background: #eff6ff;
+        color: #1d4ed8;
+        border-radius: 999px;
+        padding: 2px 7px;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1.1;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .mini-open:hover {
+        background: #dbeafe;
+        border-color: #60a5fa;
+    }
+
     </style>
     """,
     unsafe_allow_html=True,
@@ -2535,8 +2559,9 @@ def make_mindmap_html(selected_ticker=None):
             safe_display = str(display).replace('"', '&quot;')
             safe_name = str(name).replace('"', '&quot;')
             items.append(
-                '<div class="stock-node{}" onclick="openTicker(\'{}\')" title="{}を開く">'
-                '<div class="ticker">{}</div>'
+                '<div class="stock-node{}" title="{}">'
+                '<div class="ticker-line"><span class="ticker">{}</span>'
+                '<button class="mini-open" onclick="openTicker(\'{}\'); event.stopPropagation();">開く</button></div>'
                 '<div class="company">{}</div>'
                 '</div>'.format(active, safe_display, safe_display, safe_display, safe_name)
             )
@@ -2690,25 +2715,36 @@ def make_mindmap_html(selected_ticker=None):
         const t = encodeURIComponent(String(ticker || "").trim().toUpperCase());
         if (!t) return;
 
-        // iframe内にStreamlitアプリを読み込ませない。
-        // 親ページのURLだけを書き換えて、親側のStreamlitに読み取らせる。
-        const newHash = "#open_ticker=" + t + "&from=ai";
-
+        // iframe内にアプリを増殖させないため、できるだけトップページへ遷移させる
+        let base = "";
         try {
-            if (window.parent && window.parent !== window) {
-                window.parent.location.hash = newHash;
-                window.parent.postMessage({type: "open_ticker", ticker: t, from: "ai"}, "*");
-                return;
+            base = window.top.location.origin + window.top.location.pathname;
+        } catch (e) {
+            try {
+                base = window.parent.location.origin + window.parent.location.pathname;
+            } catch (e2) {
+                base = window.location.origin + window.location.pathname;
             }
-        } catch (e) {}
+        }
+
+        const url = base + "?open_ticker=" + t + "&from=ai";
 
         try {
-            window.top.location.hash = newHash;
-            window.top.postMessage({type: "open_ticker", ticker: t, from: "ai"}, "*");
+            window.open(url, "_top");
             return;
         } catch (e) {}
 
-        window.location.hash = newHash;
+        try {
+            window.top.location.href = url;
+            return;
+        } catch (e) {}
+
+        try {
+            window.parent.location.href = url;
+            return;
+        } catch (e) {}
+
+        window.location.href = url;
     }
     </script>
     </head>
@@ -2959,7 +2995,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v44</div>
+            <div class="hero-title-main">AI関連株コード辞典 v45</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3012,7 +3048,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v44</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v45</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3099,7 +3135,7 @@ elif mode == "カテゴリ表示":
 
 elif mode == "AI関連図":
     st.subheader("🗺 AI関連図")
-    st.caption("関連図内のティッカーコードを押すと、ティッカー検索ページで会社情報を表示します。")
+    st.caption("関連図内のティッカーコード横の「開く」を押すと、ティッカー検索ページで会社情報を表示します。")
     components.html(make_mindmap_html(), height=980, scrolling=False)
 
     fav_df = get_persistent_favorites_df()

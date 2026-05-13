@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v39", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v40", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v39 Clean
+# AI関連株コード辞典 v40 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -155,13 +155,20 @@ def normalize_display_category(value):
     return s or "未分類"
 
 def open_ticker_from_button(ticker):
-    """一覧や関連図からティッカー検索ページへ移動する。"""
+    """一覧からティッカー検索ページへ移動する。"""
     t = str(ticker or "").upper().strip()
     if not t:
         return
     st.session_state.last_ticker = t
+    st.session_state.display_mode = "ティッカー検索"
+    # radio widgetのkeyは次回作成前に消すと、display_modeの値で作り直せる
+    if "display_mode_radio" in st.session_state:
+        try:
+            del st.session_state["display_mode_radio"]
+        except Exception:
+            pass
     try:
-        st.query_params["open_ticker"] = t
+        st.query_params.clear()
     except Exception:
         pass
     st.rerun()
@@ -177,16 +184,17 @@ def apply_query_open_ticker():
         if t:
             st.session_state.last_ticker = t
             st.session_state.display_mode = "ティッカー検索"
-            # radio側のkeyも次回作成前なら安全に合わせられる
             if "display_mode_radio" in st.session_state:
-                del st.session_state["display_mode_radio"]
+                try:
+                    del st.session_state["display_mode_radio"]
+                except Exception:
+                    pass
             try:
                 st.query_params.clear()
             except Exception:
                 pass
     except Exception:
         pass
-
 
 def add_registered_extra_stock(row, category=None):
     ticker = str(row.get("ticker", "")).upper().strip()
@@ -2901,7 +2909,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v39</div>
+            <div class="hero-title-main">AI関連株コード辞典 v40</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2909,12 +2917,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+apply_query_open_ticker()
+
 st.sidebar.markdown(
     """
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v39</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v40</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3016,7 +3026,6 @@ elif mode == "AI関連図":
             with cols[i % 4]:
                 if st.button(label, key=f"open_ai_{t}_{i}", use_container_width=True):
                     open_ticker_from_button(t)
-                    st.rerun()
 
         with st.expander("登録解除"):
             target = st.selectbox("解除する銘柄", fav_df["ticker"].tolist())

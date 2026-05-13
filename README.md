@@ -1,3 +1,12 @@
+# AI関連株コード辞典 v40 Click Navigation Fix
+
+## v40で修正した内容
+- v39で定義だけになっていた apply_query_open_ticker() を起動時に実行
+- 全銘柄一覧の「開く」を押したら、直接ティッカー検索ページへ切り替えるよう修正
+- AI関連図のティッカークリックで URL の open_ticker を読み取り、ティッカー検索ページへ切り替えるよう修正
+- display_mode_radio の状態を安全に作り直し、Streamlit session_state エラーを回避
+- v39のコンパクトな枠付き一覧は維持
+
 # AI関連株コード辞典 v39 Compact Click Open
 
 ## v39で修正した内容

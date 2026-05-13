@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v38", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v39", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v38 Clean
+# AI関連株コード辞典 v39 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -160,12 +160,11 @@ def open_ticker_from_button(ticker):
     if not t:
         return
     st.session_state.last_ticker = t
-    # radio widgetの値を直接後から変えるとStreamlitエラーになるため、
-    # query_params経由で次回実行の先頭で切り替える
     try:
         st.query_params["open_ticker"] = t
     except Exception:
         pass
+    st.rerun()
 
 def apply_query_open_ticker():
     """AI関連図HTMLのリンク ?open_ticker=XXX からティッカー検索へ移動する。"""
@@ -2506,7 +2505,7 @@ def make_mindmap_html(selected_ticker=None):
             safe_display = str(display).replace('"', '&quot;')
             safe_name = str(name).replace('"', '&quot;')
             items.append(
-                '<a class="stock-node{}" href="?open_ticker={}" target="_self" title="{}を開く">'
+                '<a class="stock-node{}" href="?open_ticker={}" target="_top" title="{}を開く">'
                 '<div class="ticker">{}</div>'
                 '<div class="company">{}</div>'
                 '</a>'.format(active, safe_display, safe_display, safe_display, safe_name)
@@ -2902,7 +2901,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v38</div>
+            <div class="hero-title-main">AI関連株コード辞典 v39</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2915,7 +2914,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v38</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v39</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3033,45 +3032,72 @@ elif mode == "AI関連図":
 
 elif mode == "全銘柄一覧":
     st.subheader("登録銘柄一覧")
-    st.caption("カテゴリは1つに整理して表示します。各行の「開く」を押すと、ティッカー検索ページでその銘柄を開きます。")
+    st.caption("各行の「開く」を押すと、ティッカー検索ページへ移動してその銘柄の会社情報を表示します。")
 
     all_df = get_all_registered_df()
     list_df = all_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]].copy()
     list_df["category"] = list_df["category"].apply(normalize_display_category)
     list_df = list_df.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
 
-    # 全銘柄一覧にカテゴリ表示機能を統合
-    with st.expander("📂 カテゴリ別に見る", expanded=False):
-        if list_df.empty:
-            st.info("表示できる銘柄がありません。")
-        else:
-            cats = ["すべて"] + sorted([c for c in list_df["category"].dropna().unique().tolist() if str(c).strip()])
-            selected_cat = st.selectbox("カテゴリを選択", cats, key="all_list_category_filter")
-            cat_df = list_df if selected_cat == "すべて" else list_df[list_df["category"] == selected_cat]
-            st.write(f"表示件数：{len(cat_df)}")
-            for cat, group in cat_df.groupby("category", dropna=False):
-                st.markdown(f"#### {cat}")
-                cols = st.columns(4)
-                for i, (_, r) in enumerate(group.iterrows()):
-                    t = str(r["ticker"]).upper()
-                    company = str(r.get("company", ""))
-                    with cols[i % 4]:
-                        if st.button(f"開く：{t}\n{company[:14]}", key=f"open_cat_{cat}_{t}_{i}", use_container_width=True):
-                            open_ticker_from_button(t)
-                            st.rerun()
+    # コンパクトな枠付き一覧用CSS
+    st.markdown("""
+    <style>
+    .compact-stock-row {
+        border: 1px solid #dbe4ef;
+        border-radius: 10px;
+        background: #ffffff;
+        padding: 7px 9px;
+        margin: 4px 0;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+    .compact-stock-row .tkr {
+        font-size: 15px;
+        font-weight: 900;
+        color: #0f172a;
+        line-height: 1.1;
+    }
+    .compact-stock-row .sub {
+        font-size: 11px;
+        color: #64748b;
+        line-height: 1.15;
+        margin-top: 1px;
+    }
+    .compact-stock-row .company {
+        font-size: 13px;
+        font-weight: 700;
+        color: #1f2937;
+        line-height: 1.25;
+    }
+    .compact-stock-row .cat {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #eef2ff;
+        color: #3730a3;
+        font-size: 11px;
+        font-weight: 800;
+        white-space: nowrap;
+    }
+    .compact-stock-row .biz {
+        font-size: 12px;
+        color: #334155;
+        line-height: 1.25;
+    }
+    .compact-header {
+        font-size: 12px;
+        font-weight: 800;
+        color: #475569;
+        padding: 0 6px 4px 6px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # 行ごとの「開く」ボタン付きカード一覧
     if list_df.empty:
         st.info("登録銘柄がありません。")
     else:
-        header_cols = st.columns([1.0, 1.1, 1.7, 1.1, 3.4, 0.9, 1.0])
-        header_cols[0].markdown("**ティッカー**")
-        header_cols[1].markdown("**Yahooコード**")
-        header_cols[2].markdown("**会社名**")
-        header_cols[3].markdown("**カテゴリ**")
-        header_cols[4].markdown("**事業内容**")
-        header_cols[5].markdown("**AI関連度**")
-        header_cols[6].markdown("**開く**")
+        hc = st.columns([0.9, 1.0, 1.5, 1.0, 2.8, 0.75, 0.75])
+        for col, name in zip(hc, ["Ticker", "Yahoo", "会社名", "カテゴリ", "事業内容", "AI", ""]):
+            col.markdown(f'<div class="compact-header">{name}</div>', unsafe_allow_html=True)
 
         for i, (_, r) in enumerate(list_df.iterrows()):
             t = str(r["ticker"]).upper()
@@ -3080,18 +3106,18 @@ elif mode == "全銘柄一覧":
             cat = str(r.get("category", "未分類"))
             business = str(r.get("business", ""))
             score = str(r.get("ai_score", ""))
-            row_cols = st.columns([1.0, 1.1, 1.7, 1.1, 3.4, 0.9, 1.0])
-            row_cols[0].markdown(f"**{t}**")
-            row_cols[1].write(yf)
-            row_cols[2].write(company)
-            row_cols[3].write(cat)
-            row_cols[4].write(business[:80] + ("…" if len(business) > 80 else ""))
-            row_cols[5].write(score)
+
+            row_cols = st.columns([0.9, 1.0, 1.5, 1.0, 2.8, 0.75, 0.75])
+            row_cols[0].markdown(f'<div class="compact-stock-row"><div class="tkr">{t}</div></div>', unsafe_allow_html=True)
+            row_cols[1].markdown(f'<div class="compact-stock-row"><div class="sub">{yf}</div></div>', unsafe_allow_html=True)
+            row_cols[2].markdown(f'<div class="compact-stock-row"><div class="company">{company}</div></div>', unsafe_allow_html=True)
+            row_cols[3].markdown(f'<div class="compact-stock-row"><span class="cat">{cat}</span></div>', unsafe_allow_html=True)
+            short_biz = business[:70] + ("…" if len(business) > 70 else "")
+            row_cols[4].markdown(f'<div class="compact-stock-row"><div class="biz">{short_biz}</div></div>', unsafe_allow_html=True)
+            row_cols[5].markdown(f'<div class="compact-stock-row"><div class="tkr">{score}</div></div>', unsafe_allow_html=True)
             with row_cols[6]:
                 if st.button("開く", key=f"open_row_{t}_{i}", use_container_width=True):
                     open_ticker_from_button(t)
-                    st.rerun()
-            st.divider()
 
     google_df = load_google_sheet_stocks()
     if google_sheet_enabled():

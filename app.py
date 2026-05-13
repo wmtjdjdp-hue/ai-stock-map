@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v36", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v37", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v36 Clean
+# AI関連株コード辞典 v37 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -2898,7 +2898,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v36</div>
+            <div class="hero-title-main">AI関連株コード辞典 v37</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2911,7 +2911,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v36</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v37</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3016,35 +3016,65 @@ elif mode == "AI関連図":
 
 elif mode == "全銘柄一覧":
     st.subheader("登録銘柄一覧")
-    st.caption("カテゴリ表示は1つにまとめています。ティッカーコードのボタンを押すと、ティッカー検索ページで開きます。")
+    st.caption("カテゴリは1つに整理して表示します。各行の「開く」を押すと、ティッカー検索ページでその銘柄を開きます。")
 
     all_df = get_all_registered_df()
     list_df = all_df[["ticker", "yf_ticker", "company", "category", "business", "ai_score", "official_ir_url"]].copy()
     list_df["category"] = list_df["category"].apply(normalize_display_category)
     list_df = list_df.drop_duplicates(subset=["ticker"], keep="last").reset_index(drop=True)
 
-    # 表示名を少し見やすくする
-    display_df = list_df.rename(columns={
-        "ticker": "ティッカー",
-        "yf_ticker": "Yahooコード",
-        "company": "会社名",
-        "category": "カテゴリ",
-        "business": "事業内容",
-        "ai_score": "AI関連度",
-        "official_ir_url": "IR URL",
-    })
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    # 全銘柄一覧にカテゴリ表示機能を統合
+    with st.expander("📂 カテゴリ別に見る", expanded=False):
+        if list_df.empty:
+            st.info("表示できる銘柄がありません。")
+        else:
+            cats = ["すべて"] + sorted([c for c in list_df["category"].dropna().unique().tolist() if str(c).strip()])
+            selected_cat = st.selectbox("カテゴリを選択", cats, key="all_list_category_filter")
+            cat_df = list_df if selected_cat == "すべて" else list_df[list_df["category"] == selected_cat]
+            st.write(f"表示件数：{len(cat_df)}")
+            for cat, group in cat_df.groupby("category", dropna=False):
+                st.markdown(f"#### {cat}")
+                cols = st.columns(4)
+                for i, (_, r) in enumerate(group.iterrows()):
+                    t = str(r["ticker"]).upper()
+                    company = str(r.get("company", ""))
+                    with cols[i % 4]:
+                        if st.button(f"開く：{t}\n{company[:14]}", key=f"open_cat_{cat}_{t}_{i}", use_container_width=True):
+                            open_ticker_from_button(t)
+                            st.rerun()
 
-    st.markdown("### ティッカーから開く")
-    cols = st.columns(5)
-    for i, (_, r) in enumerate(list_df.iterrows()):
-        t = str(r["ticker"]).upper()
-        company = str(r.get("company", ""))
-        label = f"{t}\\n{company[:12]}"
-        with cols[i % 5]:
-            if st.button(label, key=f"open_all_{t}_{i}", use_container_width=True):
-                open_ticker_from_button(t)
-                st.rerun()
+    # 行ごとの「開く」ボタン付きカード一覧
+    if list_df.empty:
+        st.info("登録銘柄がありません。")
+    else:
+        header_cols = st.columns([1.0, 1.1, 1.7, 1.1, 3.4, 0.9, 1.0])
+        header_cols[0].markdown("**ティッカー**")
+        header_cols[1].markdown("**Yahooコード**")
+        header_cols[2].markdown("**会社名**")
+        header_cols[3].markdown("**カテゴリ**")
+        header_cols[4].markdown("**事業内容**")
+        header_cols[5].markdown("**AI関連度**")
+        header_cols[6].markdown("**開く**")
+
+        for i, (_, r) in enumerate(list_df.iterrows()):
+            t = str(r["ticker"]).upper()
+            yf = str(r.get("yf_ticker", "")).upper()
+            company = str(r.get("company", ""))
+            cat = str(r.get("category", "未分類"))
+            business = str(r.get("business", ""))
+            score = str(r.get("ai_score", ""))
+            row_cols = st.columns([1.0, 1.1, 1.7, 1.1, 3.4, 0.9, 1.0])
+            row_cols[0].markdown(f"**{t}**")
+            row_cols[1].write(yf)
+            row_cols[2].write(company)
+            row_cols[3].write(cat)
+            row_cols[4].write(business[:80] + ("…" if len(business) > 80 else ""))
+            row_cols[5].write(score)
+            with row_cols[6]:
+                if st.button("開く", key=f"open_row_{t}_{i}", use_container_width=True):
+                    open_ticker_from_button(t)
+                    st.rerun()
+            st.divider()
 
     google_df = load_google_sheet_stocks()
     if google_sheet_enabled():
@@ -3087,7 +3117,7 @@ elif mode == "全銘柄一覧":
                 st.rerun()
 
             st.markdown("### 📋 stocks.csvへ追記するCSV")
-            csv_lines = "\\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
+            csv_lines = "\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
             st.code(csv_lines, language="csv")
 
 elif mode == "API設定確認":

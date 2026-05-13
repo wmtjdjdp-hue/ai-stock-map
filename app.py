@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v40", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v41", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v40 Clean
+# AI関連株コード辞典 v41 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -81,6 +81,9 @@ if "registered_extra_stocks" not in st.session_state:
 
 if "google_sheet_last_error" not in st.session_state:
     st.session_state.google_sheet_last_error = ""
+
+if "return_to_mode" not in st.session_state:
+    st.session_state.return_to_mode = ""
 
 def get_registered_extra_df():
     if not st.session_state.registered_extra_stocks:
@@ -154,14 +157,14 @@ def normalize_display_category(value):
             s = s.split(sep)[0].strip()
     return s or "未分類"
 
-def open_ticker_from_button(ticker):
-    """一覧からティッカー検索ページへ移動する。"""
+def open_ticker_from_button(ticker, return_to="全銘柄一覧"):
+    """一覧やAI関連図からティッカー検索ページへ移動する。"""
     t = str(ticker or "").upper().strip()
     if not t:
         return
     st.session_state.last_ticker = t
     st.session_state.display_mode = "ティッカー検索"
-    # radio widgetのkeyは次回作成前に消すと、display_modeの値で作り直せる
+    st.session_state.return_to_mode = return_to
     if "display_mode_radio" in st.session_state:
         try:
             del st.session_state["display_mode_radio"]
@@ -173,17 +176,36 @@ def open_ticker_from_button(ticker):
         pass
     st.rerun()
 
+def return_to_previous_mode():
+    """ティッカー検索から元の画面へ戻る。"""
+    target = st.session_state.get("return_to_mode", "")
+    if target not in ["全銘柄一覧", "AI関連図"]:
+        target = "全銘柄一覧"
+    st.session_state.display_mode = target
+    st.session_state.return_to_mode = ""
+    if "display_mode_radio" in st.session_state:
+        try:
+            del st.session_state["display_mode_radio"]
+        except Exception:
+            pass
+    st.rerun()
+
 def apply_query_open_ticker():
     """AI関連図HTMLのリンク ?open_ticker=XXX からティッカー検索へ移動する。"""
     try:
         q = st.query_params
         t = q.get("open_ticker", "")
+        src = q.get("from", "")
         if isinstance(t, list):
             t = t[0] if t else ""
+        if isinstance(src, list):
+            src = src[0] if src else ""
         t = str(t or "").upper().strip()
+        src = str(src or "").strip()
         if t:
             st.session_state.last_ticker = t
             st.session_state.display_mode = "ティッカー検索"
+            st.session_state.return_to_mode = "AI関連図" if src == "ai" else "全銘柄一覧"
             if "display_mode_radio" in st.session_state:
                 try:
                     del st.session_state["display_mode_radio"]
@@ -2513,7 +2535,7 @@ def make_mindmap_html(selected_ticker=None):
             safe_display = str(display).replace('"', '&quot;')
             safe_name = str(name).replace('"', '&quot;')
             items.append(
-                '<a class="stock-node{}" href="?open_ticker={}" target="_top" title="{}を開く">'
+                '<a class="stock-node{}" href="?open_ticker={}&from=ai" target="_top" title="{}を開く">'
                 '<div class="ticker">{}</div>'
                 '<div class="company">{}</div>'
                 '</a>'.format(active, safe_display, safe_display, safe_display, safe_name)
@@ -2909,7 +2931,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v40</div>
+            <div class="hero-title-main">AI関連株コード辞典 v41</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -2924,7 +2946,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v40</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v41</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -2973,6 +2995,11 @@ st.sidebar.markdown(
 )
 
 if mode == "ティッカー検索":
+
+    if st.session_state.get("return_to_mode"):
+        back_label = "← 全銘柄一覧へ戻る" if st.session_state.return_to_mode == "全銘柄一覧" else "← AI関連図へ戻る"
+        if st.button(back_label, use_container_width=True):
+            return_to_previous_mode()
     ticker = st.session_state.get("last_ticker", "NVDA").strip().upper()
     row = build_row_from_ticker(ticker)
     show_stock_page(row)
@@ -3025,7 +3052,7 @@ elif mode == "AI関連図":
             label = f'{t}  {str(r.get("company", ""))[:14]}'
             with cols[i % 4]:
                 if st.button(label, key=f"open_ai_{t}_{i}", use_container_width=True):
-                    open_ticker_from_button(t)
+                    open_ticker_from_button(t, return_to="AI関連図")
 
         with st.expander("登録解除"):
             target = st.selectbox("解除する銘柄", fav_df["ticker"].tolist())
@@ -3126,7 +3153,7 @@ elif mode == "全銘柄一覧":
             row_cols[5].markdown(f'<div class="compact-stock-row"><div class="tkr">{score}</div></div>', unsafe_allow_html=True)
             with row_cols[6]:
                 if st.button("開く", key=f"open_row_{t}_{i}", use_container_width=True):
-                    open_ticker_from_button(t)
+                    open_ticker_from_button(t, return_to="全銘柄一覧")
 
     google_df = load_google_sheet_stocks()
     if google_sheet_enabled():

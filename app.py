@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v51", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v52", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v51 Clean
+# AI関連株コード辞典 v52 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -178,8 +178,9 @@ def open_ticker_from_button(ticker, return_to="全銘柄一覧"):
 
 
 def render_native_ai_map():
-    """AI関連図をシンプルな6カテゴリ枠で表示する。
-    v51: ティッカーコードだけを小さい枠で、カテゴリ内に横3つ並びで表示。
+    """AI関連図をシンプルなカテゴリ枠で表示する。
+    v52: 固定6カテゴリに加えて、登録銘柄の新しいカテゴリも自動で枠を追加する。
+    ティッカーコードだけを小さい枠で、カテゴリ内に横3つ並びで表示。
     """
     st.markdown("""
     <style>
@@ -215,6 +216,12 @@ def render_native_ai_map():
     .cat-power { background: #fff4d8; }
     .cat-dc { background: #e8f8fb; }
     .cat-semi { background: #fdeaf1; }
+    .cat-extra-0 { background: #eef2ff; }
+    .cat-extra-1 { background: #ecfeff; }
+    .cat-extra-2 { background: #f0fdf4; }
+    .cat-extra-3 { background: #fff7ed; }
+    .cat-extra-4 { background: #fdf2f8; }
+    .cat-extra-5 { background: #f5f3ff; }
 
     /* AI関連図内のティッカー小枠 */
     div[data-testid="stButton"] > button[kind="secondary"] {
@@ -249,9 +256,9 @@ def render_native_ai_map():
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="simple-ai-title">AI</div>', unsafe_allow_html=True)
-    st.markdown('<div class="simple-map-caption">カテゴリ枠内のティッカーコードを押すと、ティッカー検索ページで会社情報を表示します。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="simple-map-caption">カテゴリ枠内のティッカーコードを押すと、ティッカー検索ページで会社情報を表示します。登録カテゴリが増えると自動で枠が追加されます。</div>', unsafe_allow_html=True)
 
-    # 画像イメージに合わせた6カテゴリ。横3つ表示を前提に3件以上入れてもOK。
+    # 既存の基本6カテゴリ。構造はこのまま維持。
     category_layout = [
         ("GPU", "cat-gpu", ["NVDA", "AMD"]),
         ("メモリー", "cat-memory", ["MU", "000660.KS"]),
@@ -260,6 +267,9 @@ def render_native_ai_map():
         ("データセンター", "cat-dc", ["EQIX", "DLR"]),
         ("半導体", "cat-semi", ["ASML", "AMAT", "LRCX"]),
     ]
+
+    # category -> index を作る
+    cat_index = {cat: i for i, (cat, _, _) in enumerate(category_layout)}
 
     all_info = get_all_registered_df()
     info_map = {}
@@ -275,7 +285,9 @@ def render_native_ai_map():
     except Exception:
         pass
 
-    # Google保存済み/一時登録の銘柄も、カテゴリに一致すれば枠内へ追加
+    # Google保存済み/一時登録の銘柄を取得。
+    # 新しいカテゴリ名があれば、下に同じ構造のカテゴリ枠を自動追加する。
+    extra_style_i = 0
     try:
         fav_df = get_persistent_favorites_df()
         if not fav_df.empty:
@@ -285,18 +297,26 @@ def render_native_ai_map():
                 company = str(r.get("company", "")).strip()
                 if not t:
                     continue
+                if not cat:
+                    cat = "未分類"
 
                 info_map[t] = {"company": company, "category": cat}
 
-                for i, (base_cat, cls, tickers) in enumerate(category_layout):
-                    if cat == base_cat and t not in tickers:
-                        tickers.append(t)
-                        category_layout[i] = (base_cat, cls, tickers)
-                        break
+                if cat not in cat_index:
+                    css_class = f"cat-extra-{extra_style_i % 6}"
+                    category_layout.append((cat, css_class, []))
+                    cat_index[cat] = len(category_layout) - 1
+                    extra_style_i += 1
+
+                idx = cat_index[cat]
+                base_cat, cls, tickers = category_layout[idx]
+                if t not in tickers:
+                    tickers.append(t)
+                    category_layout[idx] = (base_cat, cls, tickers)
     except Exception:
         pass
 
-    # 3列 × 2段のカテゴリ枠
+    # 3列でカテゴリ枠を並べる。カテゴリが増えたら3列構造のまま下へ増える。
     for row_start in range(0, len(category_layout), 3):
         cat_cols = st.columns(3)
         for j, (cat, css_class, tickers) in enumerate(category_layout[row_start:row_start + 3]):
@@ -3138,7 +3158,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v51</div>
+            <div class="hero-title-main">AI関連株コード辞典 v52</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3191,7 +3211,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v51</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v52</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

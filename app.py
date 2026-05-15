@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v53", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v54", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v53 Clean
+# AI関連株コード辞典 v54 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -279,8 +279,11 @@ def get_ai_service_links():
     return {
         "ChatGPT": "https://chatgpt.com/",
         "Google Gemini": "https://gemini.google.com/",
+        "Google AI Studio": "https://aistudio.google.com/",
         "Claude": "https://claude.ai/",
         "Genspark": "https://www.genspark.ai/",
+        "Manus": "https://manus.im/",
+        "Perplexity": "https://www.perplexity.ai/",
         "Google検索": "https://www.google.com/search?q=AI+stock+data+center+semiconductor+power",
     }
 
@@ -298,7 +301,7 @@ def show_ai_research_support(row=None, combined=None, compact=False):
     prompt = build_ai_research_prompt(row, combined)
 
     st.markdown("### 🤖 APIなしAI調査サポート")
-    st.caption("API契約なしで使うための機能です。質問文をコピーして、ChatGPT / Gemini / Claude / Genspark に貼り付けて使います。")
+    st.caption("API契約なしで使うための機能です。質問文をコピーして、ChatGPT / Gemini / Google AI Studio / Claude / Genspark / Manus / Perplexity に貼り付けて使います。")
 
     c1, c2 = st.columns([1.1, 1.9])
     with c1:
@@ -328,7 +331,7 @@ def show_ai_research_support(row=None, combined=None, compact=False):
         value="",
         height=180,
         key=f"ai_answer_memo_{str(row.get('ticker','')).upper()}",
-        placeholder="ChatGPT / Gemini / Claude / Genspark の回答をここに貼り付け",
+        placeholder="ChatGPT / Gemini / Google AI Studio / Claude / Genspark / Manus / Perplexity の回答をここに貼り付け",
     )
     if memo.strip():
         st.download_button(
@@ -3325,7 +3328,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v53</div>
+            <div class="hero-title-main">AI関連株コード辞典 v54</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3378,7 +3381,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v53</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v54</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3658,7 +3661,7 @@ elif mode == "API設定確認":
     st.markdown("---")
     st.markdown("---")
     st.subheader("APIなしAI調査サポート")
-    st.write("APIなしAI調査サポートはAPIキー不要です。ChatGPT / Gemini / Claude / Genspark を外部サイトで開き、生成した質問文を貼り付けて使います。")
+    st.write("APIなしAI調査サポートはAPIキー不要です。ChatGPT / Gemini / Google AI Studio / Claude / Genspark / Manus / Perplexity を外部サイトで開き、生成した質問文を貼り付けて使います。")
 
     st.subheader("Googleスプレッドシート永久保存")
     st.write("GOOGLE_SHEET_ID:", "設定済み" if get_google_sheet_id() else "未設定")

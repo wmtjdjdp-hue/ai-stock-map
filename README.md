@@ -1,3 +1,13 @@
+# AI関連株コード辞典 v54 More AI Links
+
+## v54で追加した内容
+- APIなしAI調査サポートに以下の外部AIリンクを追加
+  - Google AI Studio
+  - Manus
+  - Perplexity
+- 既存のChatGPT / Google Gemini / Claude / Genspark / Google検索リンクは維持
+- 既存ロジック、Googleスプレッドシート保存、AI関連図、全銘柄一覧は触っていません
+
 # AI関連株コード辞典 v53 APIなしAI調査サポート
 
 ## v53で追加した内容

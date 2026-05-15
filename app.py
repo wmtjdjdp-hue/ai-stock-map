@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v52", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v53", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v52 Clean
+# AI関連株コード辞典 v53 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -175,6 +175,169 @@ def open_ticker_from_button(ticker, return_to="全銘柄一覧"):
     except Exception:
         pass
     st.rerun()
+
+
+
+# -----------------------------
+# APIなしAI調査サポート
+# 外部AIへ貼る質問文を作るだけなので、APIキー不要。
+# -----------------------------
+def build_ai_research_prompt(row, combined=None):
+    ticker = str(row.get("ticker", "")).upper().strip()
+    company = str(row.get("company", ticker)).strip()
+    category = str(row.get("category", "未分類")).strip()
+    business = str(row.get("business", "")).strip()
+    ai_relation = str(row.get("ai_relation", "")).strip()
+
+    if combined is None:
+        combined = {}
+
+    sector = str(combined.get("sector") or category or "未取得")
+    industry = str(combined.get("industry") or "未取得")
+    price = combined.get("price")
+    market_cap = combined.get("market_cap")
+    per = combined.get("per")
+    pbr = combined.get("pbr")
+    eps = combined.get("eps")
+    roe = combined.get("roe")
+    dividend_yield = combined.get("dividend_yield")
+    news = combined.get("news_headline")
+
+    try:
+        price_text = fmt_price(price, combined.get("currency", ""))
+    except Exception:
+        price_text = str(price or "未取得")
+    try:
+        market_cap_text = fmt_market_cap(market_cap)
+    except Exception:
+        market_cap_text = str(market_cap or "未取得")
+    try:
+        per_text = fmt_num(per)
+        pbr_text = fmt_num(pbr)
+        eps_text = fmt_num(eps)
+    except Exception:
+        per_text, pbr_text, eps_text = str(per or "未取得"), str(pbr or "未取得"), str(eps or "未取得")
+    try:
+        roe_value = float(roe) * 100 if roe is not None and abs(float(roe)) <= 1 else roe
+        roe_text = fmt_percent(roe_value) if roe is not None else "未取得"
+    except Exception:
+        roe_text = str(roe or "未取得")
+    try:
+        dy_value = float(dividend_yield) * 100 if dividend_yield is not None and abs(float(dividend_yield)) <= 1 else dividend_yield
+        dy_text = fmt_percent(dy_value) if dividend_yield is not None else "未取得"
+    except Exception:
+        dy_text = str(dividend_yield or "未取得")
+
+    prompt = f"""以下の会社について、AI関連株としての観点で調査してください。
+
+【基本情報】
+ティッカーコード：{ticker}
+会社名：{company}
+現在の分類：{category}
+セクター：{sector}
+業種：{industry}
+
+【事業内容】
+{business or "未取得"}
+
+【現在メモしているAIとのつながり】
+{ai_relation or "未取得"}
+
+【参考データ】
+株価：{price_text}
+時価総額：{market_cap_text}
+PER：{per_text}
+PBR：{pbr_text}
+EPS：{eps_text}
+ROE：{roe_text}
+配当利回り：{dy_text}
+ニュース見出し：{news or "未取得"}
+
+【知りたいこと】
+1. この会社はAI・データセンター・半導体・電力・冷却・メモリー・通信・素材のどれと関係が深いですか？
+2. AI関連カテゴリに分類するとしたら、最も近いカテゴリを1つ選んでください。
+   候補：GPU / メモリー / 冷却 / 電力 / データセンター / 半導体 / 通信 / 素材 / ソフトウェア / その他
+3. AI関連度を1〜5で評価してください。
+   1 = ほぼ無関係
+   3 = 間接的に関係あり
+   5 = AIインフラ需要と強く関係
+4. AIとのつながりを、日本語で短くわかりやすく説明してください。
+5. 競合・関連銘柄を5〜10個挙げてください。
+6. 投資判断ではなく、事業構造とAI需要との関係としてまとめてください。
+
+【出力形式】
+カテゴリ候補：
+AI関連度：
+AIとのつながり：
+関連銘柄：
+注意点：
+まとめ：
+"""
+    return prompt
+
+def get_ai_service_links():
+    return {
+        "ChatGPT": "https://chatgpt.com/",
+        "Google Gemini": "https://gemini.google.com/",
+        "Claude": "https://claude.ai/",
+        "Genspark": "https://www.genspark.ai/",
+        "Google検索": "https://www.google.com/search?q=AI+stock+data+center+semiconductor+power",
+    }
+
+def show_ai_research_support(row=None, combined=None, compact=False):
+    if row is None:
+        ticker = st.session_state.get("last_ticker", "NVDA")
+        row = build_row_from_ticker(ticker)
+
+    if combined is None:
+        try:
+            combined, _ = get_combined_data(row["yf_ticker"], FMP_API_KEY, ALPHAVANTAGE_API_KEY, FINNHUB_API_KEY)
+        except Exception:
+            combined = {}
+
+    prompt = build_ai_research_prompt(row, combined)
+
+    st.markdown("### 🤖 APIなしAI調査サポート")
+    st.caption("API契約なしで使うための機能です。質問文をコピーして、ChatGPT / Gemini / Claude / Genspark に貼り付けて使います。")
+
+    c1, c2 = st.columns([1.1, 1.9])
+    with c1:
+        st.markdown("#### 外部AIを開く")
+        for name, url in get_ai_service_links().items():
+            st.link_button(name, url, use_container_width=True)
+
+    with c2:
+        st.markdown("#### AIに貼る質問文")
+        st.text_area(
+            "この文章をコピーして外部AIに貼り付け",
+            value=prompt,
+            height=360 if not compact else 260,
+            key=f"ai_prompt_{str(row.get('ticker','')).upper()}",
+        )
+        st.download_button(
+            "質問文をテキストでダウンロード",
+            data=prompt,
+            file_name=f"ai_research_prompt_{str(row.get('ticker','')).upper()}.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+    st.markdown("#### AI回答メモ")
+    memo = st.text_area(
+        "外部AIの回答をここに貼り付けて、一時メモとして使えます",
+        value="",
+        height=180,
+        key=f"ai_answer_memo_{str(row.get('ticker','')).upper()}",
+        placeholder="ChatGPT / Gemini / Claude / Genspark の回答をここに貼り付け",
+    )
+    if memo.strip():
+        st.download_button(
+            "AI回答メモを保存用テキストでダウンロード",
+            data=memo,
+            file_name=f"ai_answer_memo_{str(row.get('ticker','')).upper()}.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
 
 
 def render_native_ai_map():
@@ -3147,6 +3310,10 @@ def show_stock_page(row):
         st.plotly_chart(fig, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+
+    with st.expander("🤖 APIなしAI調査サポート"):
+        show_ai_research_support(row=row, combined=combined, compact=True)
+
     show_external_links(row)
     show_register_box(row)
 # -----------------------------
@@ -3158,7 +3325,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v52</div>
+            <div class="hero-title-main">AI関連株コード辞典 v53</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3211,7 +3378,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v52</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v53</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3222,7 +3389,7 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown('<div class="sidebar-menu-label">表示モード</div>', unsafe_allow_html=True)
-MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "API設定確認"]
+MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "AI調査サポート", "API設定確認"]
 
 if "display_mode" not in st.session_state:
     st.session_state.display_mode = "ティッカー検索"
@@ -3455,6 +3622,18 @@ elif mode == "全銘柄一覧":
             csv_lines = "\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
             st.code(csv_lines, language="csv")
 
+elif mode == "AI調査サポート":
+    st.subheader("🤖 APIなしAI調査サポート")
+    st.caption("AI API契約なしで、外部AIに貼る質問文を自動生成します。")
+
+    default_ticker = st.session_state.get("last_ticker", "NVDA")
+    ai_ticker = st.text_input("調査したいティッカーコード", value=default_ticker, key="ai_support_ticker").strip().upper()
+
+    if ai_ticker:
+        row = build_row_from_ticker(ai_ticker)
+        show_ai_research_support(row=row, combined=None, compact=False)
+
+
 elif mode == "API設定確認":
     st.subheader("API設定確認")
     st.write("FMP_API_KEY:", "設定済み" if FMP_API_KEY else "未設定")
@@ -3477,6 +3656,10 @@ elif mode == "API設定確認":
 
 
     st.markdown("---")
+    st.markdown("---")
+    st.subheader("APIなしAI調査サポート")
+    st.write("APIなしAI調査サポートはAPIキー不要です。ChatGPT / Gemini / Claude / Genspark を外部サイトで開き、生成した質問文を貼り付けて使います。")
+
     st.subheader("Googleスプレッドシート永久保存")
     st.write("GOOGLE_SHEET_ID:", "設定済み" if get_google_sheet_id() else "未設定")
     st.write("gcp_service_account:", "設定済み" if get_service_account_info() else "未設定")

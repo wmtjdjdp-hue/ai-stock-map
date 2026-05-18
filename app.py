@@ -22,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v64", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v65", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v64 Clean
+# AI関連株コード辞典 v65 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -437,6 +437,42 @@ div[data-testid="stSelectbox"] span {
     color: #111827 !important;
     opacity: 1 !important;
 }
+
+/* v65: 左サイドバーの文字色を白に固定 */
+section[data-testid="stSidebar"] *,
+section[data-testid="stSidebar"] label,
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] span,
+section[data-testid="stSidebar"] div,
+section[data-testid="stSidebar"] .stMarkdown,
+section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* ラジオボタンの選択肢も白に固定 */
+section[data-testid="stSidebar"] div[data-testid="stRadio"] label,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] label *,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] p,
+section[data-testid="stSidebar"] div[data-testid="stRadio"] span {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* 入力欄は白背景なので文字だけ黒に戻す */
+section[data-testid="stSidebar"] input,
+section[data-testid="stSidebar"] textarea {
+    color: #111827 !important;
+    background-color: #ffffff !important;
+}
+
+/* チャート期間入力欄のラベルも白に固定 */
+section[data-testid="stSidebar"] [data-testid="stTextInput"] label,
+section[data-testid="stSidebar"] [data-testid="stTextInput"] label * {
+    color: #ffffff !important;
+    opacity: 1 !important;
+}
+
 </style>
 
 </style>
@@ -4354,7 +4390,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v64</div>
+            <div class="hero-title-main">AI関連株コード辞典 v65</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -4407,7 +4443,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v64</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v65</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

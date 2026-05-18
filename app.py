@@ -22,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v59", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v60", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v59 Clean
+# AI関連株コード辞典 v60 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -807,6 +807,263 @@ def save_stock_to_google_sheet(row, category=None):
         msg = f"保存エラー：{type(e).__name__} / {str(e) or repr(e)}"
         st.session_state.google_sheet_last_error = msg
         return False, msg
+
+
+# -----------------------------
+# 監視銘柄 永久保存
+# stocksシートとは別に watchlist シートへ保存する
+# -----------------------------
+WATCHLIST_COLS = [
+    "registered_date",
+    "ticker",
+    "yf_ticker",
+    "company",
+    "price",
+    "per",
+    "pbr",
+    "roe",
+    "dividend_yield",
+    "highest_price",
+    "lowest_price",
+    "currency",
+]
+
+def get_gspread_spreadsheet():
+    """既存のGoogle Sheets設定を使ってスプレッドシート本体を開く。"""
+    try:
+        if not google_sheet_enabled():
+            st.session_state.google_sheet_last_error = "GOOGLE_SHEET_ID / gcp_service_account / gspread のいずれかが未設定です。"
+            return None
+
+        info = get_service_account_info()
+        if not info:
+            st.session_state.google_sheet_last_error = "gcp_service_account が読み取れません。Secretsを確認してください。"
+            return None
+
+        sheet_id = str(get_google_sheet_id()).strip()
+        if not sheet_id:
+            st.session_state.google_sheet_last_error = "GOOGLE_SHEET_ID が空です。"
+            return None
+
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_info(info, scopes=scopes)
+        client = gspread.authorize(creds)
+        return client.open_by_key(sheet_id)
+    except Exception as e:
+        st.session_state.google_sheet_last_error = f"スプレッドシート接続エラー：{type(e).__name__} / {str(e) or repr(e)}"
+        return None
+
+def get_watchlist_worksheet():
+    """監視銘柄用の watchlist シートを取得/作成する。"""
+    try:
+        spreadsheet = get_gspread_spreadsheet()
+        if spreadsheet is None:
+            return None
+
+        try:
+            ws = spreadsheet.worksheet("watchlist")
+        except Exception:
+            ws = spreadsheet.add_worksheet(title="watchlist", rows=1000, cols=len(WATCHLIST_COLS))
+
+        try:
+            header = ws.row_values(1)
+            if not header:
+                ws.append_row(WATCHLIST_COLS)
+            elif header[:len(WATCHLIST_COLS)] != WATCHLIST_COLS:
+                end_col = chr(ord("A") + len(WATCHLIST_COLS) - 1)
+                ws.update(f"A1:{end_col}1", [WATCHLIST_COLS])
+        except Exception as e:
+            st.session_state.google_sheet_last_error = f"watchlistヘッダー確認エラー：{type(e).__name__} / {str(e) or repr(e)}"
+            return None
+
+        return ws
+    except Exception as e:
+        st.session_state.google_sheet_last_error = f"watchlist接続エラー：{type(e).__name__} / {str(e) or repr(e)}"
+        return None
+
+@st.cache_data(ttl=60)
+def load_watchlist_df():
+    """Googleスプレッドシートの watchlist を読み込む。"""
+    try:
+        ws = get_watchlist_worksheet()
+        if ws is None:
+            return pd.DataFrame(columns=WATCHLIST_COLS)
+
+        values = ws.get_all_values()
+        if not values:
+            return pd.DataFrame(columns=WATCHLIST_COLS)
+
+        rows = values[1:]
+        normalized = []
+        for row in rows:
+            if not any(str(x).strip() for x in row):
+                continue
+            row = list(row) + [""] * (len(WATCHLIST_COLS) - len(row))
+            normalized.append(row[:len(WATCHLIST_COLS)])
+
+        if not normalized:
+            return pd.DataFrame(columns=WATCHLIST_COLS)
+
+        df = pd.DataFrame(normalized, columns=WATCHLIST_COLS)
+        df["ticker"] = df["ticker"].astype(str).str.upper()
+        df["yf_ticker"] = df["yf_ticker"].astype(str).str.upper()
+        return df
+    except Exception as e:
+        st.session_state.google_sheet_last_error = f"監視銘柄読み込みエラー：{type(e).__name__} / {str(e) or repr(e)}"
+        return pd.DataFrame(columns=WATCHLIST_COLS)
+
+def make_watchlist_row(row, combined, roe_value=None, dy_value=None):
+    """現在表示中の銘柄データから監視銘柄保存用の行を作る。"""
+    import datetime as _dt
+
+    ticker = str(row.get("ticker", "")).upper().strip()
+    yf_ticker = str(row.get("yf_ticker", ticker)).upper().strip()
+    company = clean_company_name(row.get("company", ticker)) or ticker
+    currency = str(combined.get("currency") or "")
+
+    high = combined.get("fifty_two_high")
+    low = combined.get("fifty_two_low")
+
+    # 52週高値/安値が取れない場合は、5年チャートの終値から最高/最低を補完
+    if high is None or low is None or str(high) == "" or str(low) == "":
+        try:
+            hist = get_yf_history(yf_ticker, "5y")
+            if not hist.empty and "Close" in hist.columns:
+                if high is None or str(high) == "":
+                    high = hist["Close"].max()
+                if low is None or str(low) == "":
+                    low = hist["Close"].min()
+        except Exception:
+            pass
+
+    return {
+        "registered_date": _dt.datetime.now().strftime("%Y年%m月%d日"),
+        "ticker": ticker,
+        "yf_ticker": yf_ticker,
+        "company": company,
+        "price": fmt_price(combined.get("price"), currency),
+        "per": fmt_num(combined.get("per")),
+        "pbr": fmt_num(combined.get("pbr")),
+        "roe": fmt_percent(roe_value),
+        "dividend_yield": fmt_percent(dy_value),
+        "highest_price": fmt_price(high, currency),
+        "lowest_price": fmt_price(low, currency),
+        "currency": currency,
+    }
+
+def save_watchlist_to_google(watch_row):
+    """監視銘柄をwatchlistシートへ保存。既存ティッカーは上書き。"""
+    try:
+        ws = get_watchlist_worksheet()
+        if ws is None:
+            return False, st.session_state.get("google_sheet_last_error", "Googleスプレッドシート未設定")
+
+        ticker = str(watch_row.get("ticker", "")).upper().strip()
+        if not ticker:
+            return False, "ティッカーが空です"
+
+        values = [str(watch_row.get(col, "")) for col in WATCHLIST_COLS]
+
+        try:
+            header = ws.row_values(1)
+            if not header:
+                ws.append_row(WATCHLIST_COLS)
+            elif header[:len(WATCHLIST_COLS)] != WATCHLIST_COLS:
+                end_col = chr(ord("A") + len(WATCHLIST_COLS) - 1)
+                ws.update(f"A1:{end_col}1", [WATCHLIST_COLS])
+        except Exception:
+            pass
+
+        tickers = [str(x).upper().strip() for x in ws.col_values(2)]  # B列 ticker
+
+        if ticker in tickers:
+            row_no = tickers.index(ticker) + 1
+            end_col = chr(ord("A") + len(WATCHLIST_COLS) - 1)
+            ws.update(f"A{row_no}:{end_col}{row_no}", [values])
+            load_watchlist_df.clear()
+            return True, f"{ticker} の監視データを更新しました"
+        else:
+            next_row = len(tickers) + 1
+            if next_row < 2:
+                next_row = 2
+            end_col = chr(ord("A") + len(WATCHLIST_COLS) - 1)
+            ws.update(f"A{next_row}:{end_col}{next_row}", [values])
+            load_watchlist_df.clear()
+            return True, f"{ticker} を監視銘柄に永久保存しました"
+
+    except Exception as e:
+        return False, f"監視銘柄保存エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+def delete_watchlist_from_google(ticker):
+    """監視銘柄をwatchlistシートから削除。"""
+    try:
+        ws = get_watchlist_worksheet()
+        if ws is None:
+            return False, st.session_state.get("google_sheet_last_error", "Googleスプレッドシート未設定")
+
+        ticker = str(ticker).upper().strip()
+        tickers = [str(x).upper().strip() for x in ws.col_values(2)]  # B列 ticker
+        if ticker in tickers:
+            row_no = tickers.index(ticker) + 1
+            if row_no > 1:
+                ws.delete_rows(row_no)
+                load_watchlist_df.clear()
+                return True, f"{ticker} を監視銘柄から削除しました"
+        return False, "対象の監視銘柄が見つかりません"
+
+    except Exception as e:
+        return False, f"監視銘柄削除エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+def show_watchlist_page():
+    """監視銘柄ページ。永久保存済みの監視銘柄を表示・削除・開く。"""
+    st.subheader("👁 監視銘柄")
+    st.caption("登録した日の株価・PER・PBR・ROE・利回り・過去高値/安値をGoogleスプレッドシートに永久保存します。")
+
+    df = load_watchlist_df()
+    if df.empty:
+        st.info("まだ監視銘柄がありません。ティッカー検索ページから「監視銘柄に登録」を押すと追加できます。")
+        return
+
+    display_cols = [
+        "registered_date", "ticker", "price", "per", "pbr", "roe",
+        "dividend_yield", "highest_price", "lowest_price"
+    ]
+    rename_map = {
+        "registered_date": "登録日",
+        "ticker": "ティッカー",
+        "price": "登録日の株価",
+        "per": "PER",
+        "pbr": "PBR",
+        "roe": "ROE",
+        "dividend_yield": "利回り",
+        "highest_price": "過去最高値",
+        "lowest_price": "過去最低値",
+    }
+
+    show_df = df[display_cols].rename(columns=rename_map).copy()
+    st.dataframe(show_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### 操作")
+    col1, col2 = st.columns(2)
+    with col1:
+        open_target = st.selectbox("会社情報を開く", df["ticker"].tolist(), key="watch_open_target")
+        if st.button("選択した監視銘柄を開く", use_container_width=True):
+            open_ticker_from_button(open_target, return_to="監視銘柄")
+
+    with col2:
+        delete_target = st.selectbox("削除する銘柄", df["ticker"].tolist(), key="watch_delete_target")
+        if st.button("選択した監視銘柄を削除", use_container_width=True):
+            ok, msg = delete_watchlist_from_google(delete_target)
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
+            st.rerun()
+
+
 
 def delete_stock_from_google_sheet(ticker):
     try:
@@ -3371,6 +3628,21 @@ def show_stock_page(row):
     st.caption("※ 自動取得データは参考値です。無料API / yfinance は欠損・遅延・制限があります。投資判断は自己責任でお願いします。")
     st.markdown('</div>', unsafe_allow_html=True)
 
+    with st.expander("👁 監視銘柄に登録"):
+        st.caption("現在表示中のデータを、登録日のスナップショットとしてGoogleスプレッドシートの watchlist シートに保存します。")
+        preview_watch = make_watchlist_row(row, combined, roe_value=roe, dy_value=dy)
+        st.write(
+            f"登録内容：{preview_watch['registered_date']} / {preview_watch['ticker']} / "
+            f"株価 {preview_watch['price']} / PER {preview_watch['per']} / PBR {preview_watch['pbr']} / "
+            f"ROE {preview_watch['roe']} / 利回り {preview_watch['dividend_yield']}"
+        )
+        if st.button("この銘柄を監視銘柄に登録・更新", key=f"watch_add_{row['ticker']}", use_container_width=True):
+            ok, msg = save_watchlist_to_google(preview_watch)
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
+
     st.markdown('<div class="v25-section-card"><div class="v25-section-title">📈 株価チャート</div>', unsafe_allow_html=True)
     hist = get_yf_history(row["yf_ticker"], period_map[period_label])
     if hist.empty:
@@ -3404,7 +3676,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v59</div>
+            <div class="hero-title-main">AI関連株コード辞典 v60</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3457,7 +3729,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v59</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v60</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3468,7 +3740,7 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown('<div class="sidebar-menu-label">表示モード</div>', unsafe_allow_html=True)
-MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "AI調査サポート", "API設定確認"]
+MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "監視銘柄", "AI調査サポート", "API設定確認"]
 
 if "display_mode" not in st.session_state:
     st.session_state.display_mode = "ティッカー検索"
@@ -3701,6 +3973,9 @@ elif mode == "全銘柄一覧":
             csv_lines = "\n".join([build_csv_line_from_row(r) for _, r in extra_df.iterrows()])
             st.code(csv_lines, language="csv")
 
+elif mode == "監視銘柄":
+    show_watchlist_page()
+
 elif mode == "AI調査サポート":
     st.subheader("🤖 APIなしAI調査サポート")
     st.caption("AI API契約なしで、外部AIに貼る質問文を自動生成します。")
@@ -3740,6 +4015,9 @@ elif mode == "API設定確認":
     st.write("APIなしAI調査サポートはAPIキー不要です。ChatGPT / Gemini / Google AI Studio / Claude / Genspark / Manus / Perplexity を外部サイトで開き、生成した質問文を貼り付けて使います。")
 
     st.subheader("Googleスプレッドシート永久保存")
+    st.write("監視銘柄は同じGoogleスプレッドシート内の watchlist シートに保存されます。")
+
+    
     st.write("GOOGLE_SHEET_ID:", "設定済み" if get_google_sheet_id() else "未設定")
     st.write("gcp_service_account:", "設定済み" if get_service_account_info() else "未設定")
     st.write("gspread:", "使用可能" if gspread is not None else "未インストール")

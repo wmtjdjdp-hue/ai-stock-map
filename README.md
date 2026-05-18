@@ -1,3 +1,12 @@
+# AI関連株コード辞典 v58 News Headline Japanese
+
+## v58で修正した内容
+- データ自動取得のニューストップ/ニュース見出しを日本語翻訳して表示
+- 英語ニュース見出しを deep_translator / GoogleTranslator で日本語化
+- 翻訳できない場合は英語のまま表示してエラー回避
+- 決算日の日本式表示は維持
+- 他のロジック、AI関連図、全銘柄一覧、Google保存、AI調査サポートは触っていません
+
 # AI関連株コード辞典 v57 Earnings Import RE Fix
 
 ## v57で修正した内容

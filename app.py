@@ -22,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v61", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v62", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v61 Clean
+# AI関連株コード辞典 v62 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -419,7 +419,27 @@ def render_native_ai_map():
         border-color: #cbd5e1 !important;
         background: #ffffff !important;
     }
-    </style>
+    
+/* v62: チャート期間の文字色を黒に固定 */
+div[data-testid="stRadio"] label,
+div[data-testid="stRadio"] p,
+div[data-testid="stRadio"] span,
+div[data-testid="stSelectbox"] label,
+div[data-testid="stSelectbox"] p,
+div[data-testid="stSelectbox"] span {
+    color: #111827 !important;
+    opacity: 1 !important;
+}
+
+
+<style>
+.chart-period, .chart-period *, .chart-range, .chart-range *, .chart-period-label, .chart-period-label * {
+    color: #111827 !important;
+    opacity: 1 !important;
+}
+</style>
+
+</style>
     """, unsafe_allow_html=True)
 
     st.markdown('<div class="simple-ai-title">AI</div>', unsafe_allow_html=True)
@@ -1031,7 +1051,6 @@ HOLDINGS_COLS = [
     "per",
     "bpr",
     "eps",
-    "bps",
     "dividend_yield",
     "highest_price",
     "lowest_price",
@@ -1149,7 +1168,6 @@ def make_holding_row(row, combined, roe_value=None, dy_value=None, shares=1):
         "per": fmt_num(combined.get("per")),
         "bpr": fmt_num(combined.get("pbr")),
         "eps": fmt_num(combined.get("eps")),
-        "bps": fmt_num(get_bps_from_combined(combined)),
         "dividend_yield": fmt_percent(dy_value),
         "highest_price": fmt_price(high, currency),
         "lowest_price": fmt_price(low, currency),
@@ -1260,7 +1278,7 @@ def delete_holding_from_google(ticker):
 def show_holdings_page():
     """保有銘柄ページ。永久保存済みの保有銘柄を表示・株数増減・削除・開く。"""
     st.subheader("💼 保有銘柄")
-    st.caption("保有した日の株価・PER・BPR・EPS・BPS・利回り・過去高値/安値・保有株数をGoogleスプレッドシートに永久保存します。")
+    st.caption("保有した日の株価・PER・BPR・EPS・利回り・過去高値/安値・保有株数をGoogleスプレッドシートに永久保存します。")
 
     df = load_holdings_df()
     if df.empty:
@@ -1268,7 +1286,7 @@ def show_holdings_page():
         return
 
     display_cols = [
-        "ticker", "held_date", "held_price", "per", "bpr", "eps", "bps",
+        "ticker", "held_date", "held_price", "per", "bpr", "eps",
         "dividend_yield", "highest_price", "lowest_price", "shares"
     ]
     rename_map = {
@@ -1278,7 +1296,6 @@ def show_holdings_page():
         "per": "PER",
         "bpr": "BPR",
         "eps": "EPS",
-        "bps": "BPS",
         "dividend_yield": "利回り",
         "highest_price": "過去最高値",
         "lowest_price": "過去最低値",
@@ -3964,7 +3981,7 @@ def show_stock_page(row):
         st.write(
             f"登録内容：{preview_holding['held_date']} / {preview_holding['ticker']} / "
             f"株価 {preview_holding['held_price']} / PER {preview_holding['per']} / BPR {preview_holding['bpr']} / "
-            f"EPS {preview_holding['eps']} / BPS {preview_holding['bps']} / 利回り {preview_holding['dividend_yield']} / "
+            f"EPS {preview_holding['eps']} / 利回り {preview_holding['dividend_yield']} / "
             f"保有株数 {preview_holding['shares']}"
         )
         if st.button("この銘柄を保有銘柄に登録・更新", key=f"holding_add_{row['ticker']}", use_container_width=True):
@@ -4007,7 +4024,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v61</div>
+            <div class="hero-title-main">AI関連株コード辞典 v62</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -4060,7 +4077,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v61</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v62</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

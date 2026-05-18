@@ -8,6 +8,7 @@ from urllib.parse import quote_plus
 import requests
 import yfinance as yf
 import json
+import re
 
 try:
     import gspread
@@ -21,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v56", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v57", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v56 Clean
+# AI関連株コード辞典 v57 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -869,6 +870,7 @@ def fmt_jp_date(value):
     try:
         import datetime as _dt
         import pandas as _pd
+        import re as _re
 
         if isinstance(value, (_pd.Timestamp, _dt.datetime, _dt.date)):
             if _pd.isna(value):
@@ -881,7 +883,7 @@ def fmt_jp_date(value):
             return "未取得"
 
         # Unix timestamp: 10桁前後=秒、13桁前後=ミリ秒
-        if re.fullmatch(r"-?\d+(\.\d+)?", s):
+        if _re.fullmatch(r"-?\d+(\.\d+)?", s):
             n = float(s)
             if abs(n) > 100000000000:
                 n = n / 1000.0
@@ -3325,7 +3327,7 @@ def show_stock_page(row):
 
     c7, c8, c9 = st.columns(3)
     with c7: metric_card("利回り", fmt_percent(dy), f'取得元：{source_map.get("dividend_yield")}')
-    with c8: metric_card("決算日", fmt_date_value(fmt_jp_date(combined.get("earnings_date"))), f'取得元：{source_map.get("earnings_date", "未取得")}')
+    with c8: metric_card("決算日", fmt_jp_date(combined.get("earnings_date")), f'取得元：{source_map.get("earnings_date", "未取得")}')
     with c9: metric_card("ニュース見出し", fmt_news_title(combined.get("news_headline")), f'取得元：{source_map.get("news_headline", "未取得")}')
 
     with st.expander("📌 取得元を確認する"):
@@ -3367,7 +3369,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v56</div>
+            <div class="hero-title-main">AI関連株コード辞典 v57</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3420,7 +3422,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v56</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v57</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

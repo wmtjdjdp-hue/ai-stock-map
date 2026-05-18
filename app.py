@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v55", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v56", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v55 Clean
+# AI関連株コード辞典 v56 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -3367,7 +3367,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v55</div>
+            <div class="hero-title-main">AI関連株コード辞典 v56</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3420,7 +3420,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v55</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v56</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

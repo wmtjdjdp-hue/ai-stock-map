@@ -22,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v63", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v64", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v63 Clean
+# AI関連株コード辞典 v64 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -1314,6 +1314,296 @@ def delete_holding_from_google(ticker):
         return False, "対象の保有銘柄が見つかりません"
     except Exception as e:
         return False, f"保有銘柄削除エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+
+# -----------------------------
+# 決算カレンダー
+# 監視銘柄・保有銘柄に登録されている銘柄の決算日を表示する
+# -----------------------------
+def parse_earnings_date_to_date(value):
+    """Unix timestamp / datetime / 文字列を date に変換する。"""
+    if value is None:
+        return None
+    try:
+        import datetime as _dt
+        import pandas as _pd
+        import re as _re
+
+        if isinstance(value, (_pd.Timestamp, _dt.datetime, _dt.date)):
+            if _pd.isna(value):
+                return None
+            return value.date() if isinstance(value, _dt.datetime) else value
+
+        s = str(value).strip()
+        if not s or s.lower() in ["nan", "none", "nat", "未取得"]:
+            return None
+
+        # Unix timestamp: 10桁前後=秒、13桁前後=ミリ秒
+        if _re.fullmatch(r"-?\d+(\.\d+)?", s):
+            n = float(s)
+            if abs(n) > 100000000000:
+                n = n / 1000.0
+            if abs(n) > 100000000:
+                return _dt.datetime.fromtimestamp(n).date()
+
+        dt = _pd.to_datetime(s, errors="coerce")
+        if _pd.isna(dt):
+            return None
+        return dt.date()
+    except Exception:
+        return None
+
+@st.cache_data(ttl=60 * 60)
+def get_earnings_date_for_calendar(ticker):
+    """ティッカーから決算日を取得してdateで返す。"""
+    try:
+        ticker = str(ticker).upper().strip()
+        if not ticker:
+            return None
+
+        row = build_row_from_ticker(ticker)
+        yf_ticker = str(row.get("yf_ticker", ticker)).upper().strip()
+
+        combined, _source_map = get_combined_data(
+            yf_ticker,
+            FMP_API_KEY,
+            ALPHAVANTAGE_API_KEY,
+            FINNHUB_API_KEY,
+        )
+
+        raw = (
+            combined.get("earnings_date")
+            or combined.get("earningsDate")
+            or combined.get("earnings_timestamp")
+            or combined.get("next_earnings_date")
+            or combined.get("決算日")
+        )
+        return parse_earnings_date_to_date(raw)
+    except Exception:
+        return None
+
+def collect_calendar_events():
+    """監視銘柄・保有銘柄からカレンダー表示用イベントを作る。"""
+    events = []
+
+    try:
+        watch_df = load_watchlist_df()
+        if not watch_df.empty:
+            for _, r in watch_df.iterrows():
+                ticker = str(r.get("ticker", "")).upper().strip()
+                if not ticker:
+                    continue
+                d = get_earnings_date_for_calendar(ticker)
+                if d:
+                    events.append({
+                        "date": d,
+                        "ticker": ticker,
+                        "kind": "監視",
+                        "color": "#d97706",  # 黄色系
+                        "class": "watch",
+                    })
+    except Exception:
+        pass
+
+    try:
+        hold_df = load_holdings_df()
+        if not hold_df.empty:
+            for _, r in hold_df.iterrows():
+                ticker = str(r.get("ticker", "")).upper().strip()
+                if not ticker:
+                    continue
+                d = get_earnings_date_for_calendar(ticker)
+                if d:
+                    events.append({
+                        "date": d,
+                        "ticker": ticker,
+                        "kind": "保有",
+                        "color": "#dc2626",  # 赤
+                        "class": "holding",
+                    })
+    except Exception:
+        pass
+
+    return events
+
+def render_earnings_calendar(year, month, events):
+    """HTMLカレンダーを描画する。"""
+    import calendar as _calendar
+    import datetime as _dt
+    from collections import defaultdict
+
+    by_day = defaultdict(list)
+    for e in events:
+        d = e.get("date")
+        if d and d.year == year and d.month == month:
+            by_day[d.day].append(e)
+
+    cal = _calendar.Calendar(firstweekday=6)  # 日曜始まり
+    weeks = cal.monthdayscalendar(year, month)
+
+    month_title = f"{year}年{month}月"
+
+    html = f"""
+    <style>
+    .earn-cal-wrap {{
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 18px;
+        overflow: hidden;
+        background: #ffffff;
+        box-shadow: 0 2px 10px rgba(15,23,42,0.04);
+    }}
+    .earn-cal-title {{
+        font-size: 28px;
+        font-weight: 950;
+        text-align: center;
+        padding: 18px 10px;
+        color: #111827;
+        background: #f8fafc;
+        border-bottom: 1px solid #e5e7eb;
+    }}
+    .earn-cal-table {{
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }}
+    .earn-cal-table th {{
+        background: #f1f5f9;
+        color: #111827;
+        font-weight: 900;
+        padding: 10px 4px;
+        border: 1px solid #e5e7eb;
+        font-size: 14px;
+    }}
+    .earn-cal-table td {{
+        height: 112px;
+        vertical-align: top;
+        border: 1px solid #e5e7eb;
+        padding: 7px 7px;
+        background: #ffffff;
+    }}
+    .earn-day-num {{
+        font-size: 13px;
+        font-weight: 800;
+        color: #334155;
+        margin-bottom: 5px;
+    }}
+    .earn-empty {{
+        background: #f8fafc !important;
+    }}
+    .earn-ticker {{
+        display: block;
+        font-size: 13px;
+        font-weight: 950;
+        line-height: 1.15;
+        margin: 3px 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+    .earn-watch {{
+        color: #d97706 !important;
+    }}
+    .earn-holding {{
+        color: #dc2626 !important;
+    }}
+    .earn-legend {{
+        display: flex;
+        gap: 18px;
+        align-items: center;
+        justify-content: center;
+        padding: 12px 10px;
+        border-top: 1px solid #e5e7eb;
+        background: #ffffff;
+        font-size: 14px;
+        font-weight: 800;
+    }}
+    .earn-legend-watch {{
+        color: #d97706;
+    }}
+    .earn-legend-holding {{
+        color: #dc2626;
+    }}
+    </style>
+    <div class="earn-cal-wrap">
+        <div class="earn-cal-title">{month_title} 決算カレンダー</div>
+        <table class="earn-cal-table">
+            <thead>
+                <tr>
+                    <th>日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th>土</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+
+    for week in weeks:
+        html += "<tr>"
+        for day in week:
+            if day == 0:
+                html += '<td class="earn-empty"></td>'
+            else:
+                day_events = by_day.get(day, [])
+                html += f'<td><div class="earn-day-num">{day}</div>'
+                for e in day_events:
+                    css = "earn-watch" if e.get("kind") == "監視" else "earn-holding"
+                    label = f'{e.get("ticker")}'
+                    html += f'<span class="earn-ticker {css}">{label}</span>'
+                html += "</td>"
+        html += "</tr>"
+
+    html += """
+            </tbody>
+        </table>
+        <div class="earn-legend">
+            <span class="earn-legend-watch">● 監視銘柄：黄色文字</span>
+            <span class="earn-legend-holding">● 保有銘柄：赤色文字</span>
+        </div>
+    </div>
+    """
+
+    st.markdown(html, unsafe_allow_html=True)
+
+def show_earnings_calendar_page():
+    """決算カレンダーページ。"""
+    import datetime as _dt
+
+    st.subheader("📅 決算カレンダー")
+    st.caption("監視銘柄と保有銘柄に登録されている銘柄の決算日をティッカーコードで表示します。")
+
+    today = _dt.date.today()
+    col1, col2, col3 = st.columns([1, 1, 2])
+    with col1:
+        year = st.number_input("年", min_value=2000, max_value=2100, value=today.year, step=1)
+    with col2:
+        month = st.number_input("月", min_value=1, max_value=12, value=today.month, step=1)
+    with col3:
+        st.write("")
+        st.write("")
+        if st.button("決算日を再取得", use_container_width=True):
+            get_earnings_date_for_calendar.clear()
+            st.rerun()
+
+    events = collect_calendar_events()
+
+    if not events:
+        st.info("監視銘柄・保有銘柄に決算日を取得できる銘柄がまだありません。")
+        return
+
+    render_earnings_calendar(int(year), int(month), events)
+
+    # 今月以外の決算日も確認できる簡易一覧
+    with st.expander("取得できた決算日一覧"):
+        rows = []
+        for e in sorted(events, key=lambda x: x["date"]):
+            rows.append({
+                "決算日": fmt_jp_date(e["date"]),
+                "ティッカー": e["ticker"],
+                "種別": e["kind"],
+            })
+        if rows:
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
 
 def show_holdings_page():
     """保有銘柄ページ。永久保存済みの保有銘柄を表示・株数増減・削除・開く。"""
@@ -4064,7 +4354,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v63</div>
+            <div class="hero-title-main">AI関連株コード辞典 v64</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -4117,7 +4407,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v63</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v64</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -4128,7 +4418,7 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown('<div class="sidebar-menu-label">表示モード</div>', unsafe_allow_html=True)
-MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "監視銘柄", "保有銘柄", "AI調査サポート", "API設定確認"]
+MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "監視銘柄", "保有銘柄", "決算カレンダー", "AI調査サポート", "API設定確認"]
 
 if "display_mode" not in st.session_state:
     st.session_state.display_mode = "ティッカー検索"
@@ -4366,6 +4656,9 @@ elif mode == "監視銘柄":
 
 elif mode == "保有銘柄":
     show_holdings_page()
+
+elif mode == "決算カレンダー":
+    show_earnings_calendar_page()
 
 elif mode == "AI調査サポート":
     st.subheader("🤖 APIなしAI調査サポート")

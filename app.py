@@ -22,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v62", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v63", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v62 Clean
+# AI関連株コード辞典 v63 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -1058,6 +1058,47 @@ HOLDINGS_COLS = [
     "shares",
 ]
 
+
+def normalize_holdings_header_and_rows(ws):
+    """holdingsシートの古いBPS列ありデータをBPSなし構造へ補正する。
+    旧列:
+    held_date,ticker,yf_ticker,company,held_price,per,bpr,eps,bps,dividend_yield,highest_price,lowest_price,currency,shares
+    新列:
+    held_date,ticker,yf_ticker,company,held_price,per,bpr,eps,dividend_yield,highest_price,lowest_price,currency,shares
+    """
+    try:
+        values = ws.get_all_values()
+        if not values:
+            ws.append_row(HOLDINGS_COLS)
+            return
+
+        header = [str(x).strip() for x in values[0]]
+
+        # 旧BPS列ありの場合は、全行からBPS列を削除して列ズレを直す
+        if "bps" in header:
+            bps_idx = header.index("bps")
+            new_values = [HOLDINGS_COLS]
+            for row in values[1:]:
+                row = list(row) + [""] * max(0, len(header) - len(row))
+                if bps_idx < len(row):
+                    row.pop(bps_idx)
+                row = row + [""] * (len(HOLDINGS_COLS) - len(row))
+                new_values.append(row[:len(HOLDINGS_COLS)])
+
+            ws.clear()
+            end_col = chr(ord("A") + len(HOLDINGS_COLS) - 1)
+            ws.update(f"A1:{end_col}{len(new_values)}", new_values)
+            return
+
+        # ヘッダーが違う場合は新ヘッダーに修正
+        if header[:len(HOLDINGS_COLS)] != HOLDINGS_COLS:
+            end_col = chr(ord("A") + len(HOLDINGS_COLS) - 1)
+            ws.update(f"A1:{end_col}1", [HOLDINGS_COLS])
+
+    except Exception as e:
+        st.session_state.google_sheet_last_error = f"holdings列補正エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+
 def get_holdings_worksheet():
     """保有銘柄用の holdings シートを取得/作成する。"""
     try:
@@ -1071,12 +1112,7 @@ def get_holdings_worksheet():
             ws = spreadsheet.add_worksheet(title="holdings", rows=1000, cols=len(HOLDINGS_COLS))
 
         try:
-            header = ws.row_values(1)
-            if not header:
-                ws.append_row(HOLDINGS_COLS)
-            elif header[:len(HOLDINGS_COLS)] != HOLDINGS_COLS:
-                end_col = chr(ord("A") + len(HOLDINGS_COLS) - 1)
-                ws.update(f"A1:{end_col}1", [HOLDINGS_COLS])
+            normalize_holdings_header_and_rows(ws)
         except Exception as e:
             st.session_state.google_sheet_last_error = f"holdingsヘッダー確認エラー：{type(e).__name__} / {str(e) or repr(e)}"
             return None
@@ -1103,7 +1139,11 @@ def load_holdings_df():
         for row in rows:
             if not any(str(x).strip() for x in row):
                 continue
-            row = list(row) + [""] * (len(HOLDINGS_COLS) - len(row))
+            row = list(row)
+            # 古いBPS列ありデータが残っている場合は、epsの次のBPS列を削除して列ズレを補正
+            if len(row) == len(HOLDINGS_COLS) + 1:
+                row.pop(8)
+            row = row + [""] * (len(HOLDINGS_COLS) - len(row))
             normalized.append(row[:len(HOLDINGS_COLS)])
 
         if not normalized:
@@ -4024,7 +4064,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v62</div>
+            <div class="hero-title-main">AI関連株コード辞典 v63</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -4077,7 +4117,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v62</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v63</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

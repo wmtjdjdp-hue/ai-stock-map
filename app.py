@@ -22,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v60", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v61", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v60 Clean
+# AI関連株コード辞典 v61 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -1016,6 +1016,320 @@ def delete_watchlist_from_google(ticker):
 
     except Exception as e:
         return False, f"監視銘柄削除エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+
+# -----------------------------
+# 保有銘柄 永久保存
+# watchlistとは別に holdings シートへ保存する
+# -----------------------------
+HOLDINGS_COLS = [
+    "held_date",
+    "ticker",
+    "yf_ticker",
+    "company",
+    "held_price",
+    "per",
+    "bpr",
+    "eps",
+    "bps",
+    "dividend_yield",
+    "highest_price",
+    "lowest_price",
+    "currency",
+    "shares",
+]
+
+def get_holdings_worksheet():
+    """保有銘柄用の holdings シートを取得/作成する。"""
+    try:
+        spreadsheet = get_gspread_spreadsheet()
+        if spreadsheet is None:
+            return None
+
+        try:
+            ws = spreadsheet.worksheet("holdings")
+        except Exception:
+            ws = spreadsheet.add_worksheet(title="holdings", rows=1000, cols=len(HOLDINGS_COLS))
+
+        try:
+            header = ws.row_values(1)
+            if not header:
+                ws.append_row(HOLDINGS_COLS)
+            elif header[:len(HOLDINGS_COLS)] != HOLDINGS_COLS:
+                end_col = chr(ord("A") + len(HOLDINGS_COLS) - 1)
+                ws.update(f"A1:{end_col}1", [HOLDINGS_COLS])
+        except Exception as e:
+            st.session_state.google_sheet_last_error = f"holdingsヘッダー確認エラー：{type(e).__name__} / {str(e) or repr(e)}"
+            return None
+
+        return ws
+    except Exception as e:
+        st.session_state.google_sheet_last_error = f"holdings接続エラー：{type(e).__name__} / {str(e) or repr(e)}"
+        return None
+
+@st.cache_data(ttl=60)
+def load_holdings_df():
+    """Googleスプレッドシートの holdings を読み込む。"""
+    try:
+        ws = get_holdings_worksheet()
+        if ws is None:
+            return pd.DataFrame(columns=HOLDINGS_COLS)
+
+        values = ws.get_all_values()
+        if not values:
+            return pd.DataFrame(columns=HOLDINGS_COLS)
+
+        rows = values[1:]
+        normalized = []
+        for row in rows:
+            if not any(str(x).strip() for x in row):
+                continue
+            row = list(row) + [""] * (len(HOLDINGS_COLS) - len(row))
+            normalized.append(row[:len(HOLDINGS_COLS)])
+
+        if not normalized:
+            return pd.DataFrame(columns=HOLDINGS_COLS)
+
+        df = pd.DataFrame(normalized, columns=HOLDINGS_COLS)
+        df["ticker"] = df["ticker"].astype(str).str.upper()
+        df["yf_ticker"] = df["yf_ticker"].astype(str).str.upper()
+        return df
+    except Exception as e:
+        st.session_state.google_sheet_last_error = f"保有銘柄読み込みエラー：{type(e).__name__} / {str(e) or repr(e)}"
+        return pd.DataFrame(columns=HOLDINGS_COLS)
+
+def get_bps_from_combined(combined):
+    """BPSを取得。yfinanceのbookValueを優先。"""
+    try:
+        for key in ["bps", "book_value", "bookValue", "book_value_per_share"]:
+            v = combined.get(key)
+            if v is not None and str(v).strip() not in ["", "nan", "None"]:
+                return v
+    except Exception:
+        pass
+    return None
+
+def make_holding_row(row, combined, roe_value=None, dy_value=None, shares=1):
+    """現在表示中の銘柄データから保有銘柄保存用の行を作る。"""
+    import datetime as _dt
+
+    ticker = str(row.get("ticker", "")).upper().strip()
+    yf_ticker = str(row.get("yf_ticker", ticker)).upper().strip()
+    company = clean_company_name(row.get("company", ticker)) or ticker
+    currency = str(combined.get("currency") or "")
+
+    high = combined.get("fifty_two_high")
+    low = combined.get("fifty_two_low")
+
+    # 52週高値/安値が取れない場合は、5年チャートの終値から最高/最低を補完
+    if high is None or low is None or str(high) == "" or str(low) == "":
+        try:
+            hist = get_yf_history(yf_ticker, "5y")
+            if not hist.empty and "Close" in hist.columns:
+                if high is None or str(high) == "":
+                    high = hist["Close"].max()
+                if low is None or str(low) == "":
+                    low = hist["Close"].min()
+        except Exception:
+            pass
+
+    try:
+        shares_int = int(float(shares))
+    except Exception:
+        shares_int = 1
+    if shares_int < 0:
+        shares_int = 0
+
+    return {
+        "held_date": _dt.datetime.now().strftime("%Y年%m月%d日"),
+        "ticker": ticker,
+        "yf_ticker": yf_ticker,
+        "company": company,
+        "held_price": fmt_price(combined.get("price"), currency),
+        "per": fmt_num(combined.get("per")),
+        "bpr": fmt_num(combined.get("pbr")),
+        "eps": fmt_num(combined.get("eps")),
+        "bps": fmt_num(get_bps_from_combined(combined)),
+        "dividend_yield": fmt_percent(dy_value),
+        "highest_price": fmt_price(high, currency),
+        "lowest_price": fmt_price(low, currency),
+        "currency": currency,
+        "shares": str(shares_int),
+    }
+
+def save_holding_to_google(holding_row):
+    """保有銘柄をholdingsシートへ保存。既存ティッカーは上書き。"""
+    try:
+        ws = get_holdings_worksheet()
+        if ws is None:
+            return False, st.session_state.get("google_sheet_last_error", "Googleスプレッドシート未設定")
+
+        ticker = str(holding_row.get("ticker", "")).upper().strip()
+        if not ticker:
+            return False, "ティッカーが空です"
+
+        values = [str(holding_row.get(col, "")) for col in HOLDINGS_COLS]
+
+        try:
+            header = ws.row_values(1)
+            if not header:
+                ws.append_row(HOLDINGS_COLS)
+            elif header[:len(HOLDINGS_COLS)] != HOLDINGS_COLS:
+                end_col = chr(ord("A") + len(HOLDINGS_COLS) - 1)
+                ws.update(f"A1:{end_col}1", [HOLDINGS_COLS])
+        except Exception:
+            pass
+
+        tickers = [str(x).upper().strip() for x in ws.col_values(2)]  # B列 ticker
+
+        if ticker in tickers:
+            row_no = tickers.index(ticker) + 1
+            # 既存の保有日は維持。株数は上書き。
+            try:
+                old_row = ws.row_values(row_no)
+                if len(old_row) >= 1 and old_row[0]:
+                    values[0] = old_row[0]
+            except Exception:
+                pass
+            end_col = chr(ord("A") + len(HOLDINGS_COLS) - 1)
+            ws.update(f"A{row_no}:{end_col}{row_no}", [values])
+            load_holdings_df.clear()
+            return True, f"{ticker} の保有銘柄データを更新しました"
+        else:
+            next_row = len(tickers) + 1
+            if next_row < 2:
+                next_row = 2
+            end_col = chr(ord("A") + len(HOLDINGS_COLS) - 1)
+            ws.update(f"A{next_row}:{end_col}{next_row}", [values])
+            load_holdings_df.clear()
+            return True, f"{ticker} を保有銘柄に永久保存しました"
+
+    except Exception as e:
+        return False, f"保有銘柄保存エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+def update_holding_shares(ticker, delta):
+    """保有株数を+/-で更新する。"""
+    try:
+        ws = get_holdings_worksheet()
+        if ws is None:
+            return False, st.session_state.get("google_sheet_last_error", "Googleスプレッドシート未設定")
+
+        ticker = str(ticker).upper().strip()
+        tickers = [str(x).upper().strip() for x in ws.col_values(2)]  # B列 ticker
+        if ticker not in tickers:
+            return False, "対象の保有銘柄が見つかりません"
+
+        row_no = tickers.index(ticker) + 1
+        shares_col = HOLDINGS_COLS.index("shares") + 1
+
+        try:
+            current = ws.cell(row_no, shares_col).value
+            current_num = int(float(current or 0))
+        except Exception:
+            current_num = 0
+
+        new_num = current_num + int(delta)
+        if new_num < 0:
+            new_num = 0
+
+        ws.update_cell(row_no, shares_col, str(new_num))
+        load_holdings_df.clear()
+        return True, f"{ticker} の保有株数を {new_num} に更新しました"
+    except Exception as e:
+        return False, f"保有株数更新エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+def delete_holding_from_google(ticker):
+    """保有銘柄をholdingsシートから削除。"""
+    try:
+        ws = get_holdings_worksheet()
+        if ws is None:
+            return False, st.session_state.get("google_sheet_last_error", "Googleスプレッドシート未設定")
+
+        ticker = str(ticker).upper().strip()
+        tickers = [str(x).upper().strip() for x in ws.col_values(2)]  # B列 ticker
+        if ticker in tickers:
+            row_no = tickers.index(ticker) + 1
+            if row_no > 1:
+                ws.delete_rows(row_no)
+                load_holdings_df.clear()
+                return True, f"{ticker} を保有銘柄から削除しました"
+        return False, "対象の保有銘柄が見つかりません"
+    except Exception as e:
+        return False, f"保有銘柄削除エラー：{type(e).__name__} / {str(e) or repr(e)}"
+
+def show_holdings_page():
+    """保有銘柄ページ。永久保存済みの保有銘柄を表示・株数増減・削除・開く。"""
+    st.subheader("💼 保有銘柄")
+    st.caption("保有した日の株価・PER・BPR・EPS・BPS・利回り・過去高値/安値・保有株数をGoogleスプレッドシートに永久保存します。")
+
+    df = load_holdings_df()
+    if df.empty:
+        st.info("まだ保有銘柄がありません。ティッカー検索ページから「保有銘柄に登録」を押すと追加できます。")
+        return
+
+    display_cols = [
+        "ticker", "held_date", "held_price", "per", "bpr", "eps", "bps",
+        "dividend_yield", "highest_price", "lowest_price", "shares"
+    ]
+    rename_map = {
+        "ticker": "ティッカー",
+        "held_date": "保有した日",
+        "held_price": "保有日の株価",
+        "per": "PER",
+        "bpr": "BPR",
+        "eps": "EPS",
+        "bps": "BPS",
+        "dividend_yield": "利回り",
+        "highest_price": "過去最高値",
+        "lowest_price": "過去最低値",
+        "shares": "保有株数",
+    }
+
+    show_df = df[display_cols].rename(columns=rename_map).copy()
+    st.dataframe(show_df, use_container_width=True, hide_index=True)
+
+    st.markdown("### 保有株数の変更")
+    for _, r in df.iterrows():
+        ticker = str(r.get("ticker", "")).upper()
+        shares = str(r.get("shares", "0"))
+        company = str(r.get("company", ""))
+
+        c1, c2, c3, c4, c5 = st.columns([1.2, 2.2, 1.0, 1.0, 1.2])
+        with c1:
+            st.markdown(f"**{ticker}**")
+        with c2:
+            st.caption(company)
+        with c3:
+            st.markdown(f"保有株数：**{shares}**")
+        with c4:
+            minus, plus = st.columns(2)
+            with minus:
+                if st.button("－", key=f"hold_minus_{ticker}", use_container_width=True):
+                    ok, msg = update_holding_shares(ticker, -1)
+                    if not ok:
+                        st.error(msg)
+                    st.rerun()
+            with plus:
+                if st.button("＋", key=f"hold_plus_{ticker}", use_container_width=True):
+                    ok, msg = update_holding_shares(ticker, 1)
+                    if not ok:
+                        st.error(msg)
+                    st.rerun()
+        with c5:
+            if st.button("開く", key=f"hold_open_{ticker}", use_container_width=True):
+                open_ticker_from_button(ticker, return_to="保有銘柄")
+
+    st.markdown("### 削除")
+    delete_target = st.selectbox("削除する保有銘柄", df["ticker"].tolist(), key="holding_delete_target")
+    if st.button("選択した保有銘柄を削除", use_container_width=True):
+        ok, msg = delete_holding_from_google(delete_target)
+        if ok:
+            st.success(msg)
+        else:
+            st.error(msg)
+        st.rerun()
+
+
 
 def show_watchlist_page():
     """監視銘柄ページ。永久保存済みの監視銘柄を表示・削除・開く。"""
@@ -3643,6 +3957,23 @@ def show_stock_page(row):
             else:
                 st.error(msg)
 
+    with st.expander("💼 保有銘柄に登録"):
+        st.caption("現在表示中のデータを、保有した日のスナップショットとしてGoogleスプレッドシートの holdings シートに保存します。")
+        initial_shares = st.number_input("保有株数", min_value=0, value=1, step=1, key=f"holding_initial_shares_{row['ticker']}")
+        preview_holding = make_holding_row(row, combined, roe_value=roe, dy_value=dy, shares=initial_shares)
+        st.write(
+            f"登録内容：{preview_holding['held_date']} / {preview_holding['ticker']} / "
+            f"株価 {preview_holding['held_price']} / PER {preview_holding['per']} / BPR {preview_holding['bpr']} / "
+            f"EPS {preview_holding['eps']} / BPS {preview_holding['bps']} / 利回り {preview_holding['dividend_yield']} / "
+            f"保有株数 {preview_holding['shares']}"
+        )
+        if st.button("この銘柄を保有銘柄に登録・更新", key=f"holding_add_{row['ticker']}", use_container_width=True):
+            ok, msg = save_holding_to_google(preview_holding)
+            if ok:
+                st.success(msg)
+            else:
+                st.error(msg)
+
     st.markdown('<div class="v25-section-card"><div class="v25-section-title">📈 株価チャート</div>', unsafe_allow_html=True)
     hist = get_yf_history(row["yf_ticker"], period_map[period_label])
     if hist.empty:
@@ -3676,7 +4007,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v60</div>
+            <div class="hero-title-main">AI関連株コード辞典 v61</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3729,7 +4060,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v60</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v61</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面
@@ -3740,7 +4071,7 @@ st.sidebar.markdown(
 )
 
 st.sidebar.markdown('<div class="sidebar-menu-label">表示モード</div>', unsafe_allow_html=True)
-MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "監視銘柄", "AI調査サポート", "API設定確認"]
+MODE_OPTIONS = ["ティッカー検索", "キーワード検索", "カテゴリ表示", "AI関連図", "全銘柄一覧", "監視銘柄", "保有銘柄", "AI調査サポート", "API設定確認"]
 
 if "display_mode" not in st.session_state:
     st.session_state.display_mode = "ティッカー検索"
@@ -3976,6 +4307,9 @@ elif mode == "全銘柄一覧":
 elif mode == "監視銘柄":
     show_watchlist_page()
 
+elif mode == "保有銘柄":
+    show_holdings_page()
+
 elif mode == "AI調査サポート":
     st.subheader("🤖 APIなしAI調査サポート")
     st.caption("AI API契約なしで、外部AIに貼る質問文を自動生成します。")
@@ -4015,7 +4349,7 @@ elif mode == "API設定確認":
     st.write("APIなしAI調査サポートはAPIキー不要です。ChatGPT / Gemini / Google AI Studio / Claude / Genspark / Manus / Perplexity を外部サイトで開き、生成した質問文を貼り付けて使います。")
 
     st.subheader("Googleスプレッドシート永久保存")
-    st.write("監視銘柄は同じGoogleスプレッドシート内の watchlist シートに保存されます。")
+    st.write("監視銘柄は同じGoogleスプレッドシート内の watchlist シートに保存されます。 保有銘柄は holdings シートに保存されます。")
 
     
     st.write("GOOGLE_SHEET_ID:", "設定済み" if get_google_sheet_id() else "未設定")

@@ -21,10 +21,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v54", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v55", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v54 Clean
+# AI関連株コード辞典 v55 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -858,6 +858,45 @@ def currency_symbol(currency):
         "HKD": "HK$",
         "CNY": "¥",
     }.get(c, c + " " if c else "")
+
+
+def fmt_jp_date(value):
+    """決算日などを日本式の日付に整形する。
+    例: 1769299200 -> 2026年1月25日
+    """
+    if value is None:
+        return "未取得"
+    try:
+        import datetime as _dt
+        import pandas as _pd
+
+        if isinstance(value, (_pd.Timestamp, _dt.datetime, _dt.date)):
+            if _pd.isna(value):
+                return "未取得"
+            d = value.date() if isinstance(value, _dt.datetime) else value
+            return f"{d.year}年{d.month}月{d.day}日"
+
+        s = str(value).strip()
+        if not s or s.lower() in ["nan", "none", "nat", "未取得"]:
+            return "未取得"
+
+        # Unix timestamp: 10桁前後=秒、13桁前後=ミリ秒
+        if re.fullmatch(r"-?\d+(\.\d+)?", s):
+            n = float(s)
+            if abs(n) > 100000000000:
+                n = n / 1000.0
+            if abs(n) > 100000000:
+                d = _dt.datetime.fromtimestamp(n).date()
+                return f"{d.year}年{d.month}月{d.day}日"
+
+        dt = _pd.to_datetime(s, errors="coerce")
+        if _pd.isna(dt):
+            return s
+        d = dt.date()
+        return f"{d.year}年{d.month}月{d.day}日"
+    except Exception:
+        return str(value)
+
 
 def fmt_price(x, currency=""):
     if x is None or x == "" or pd.isna(x):
@@ -3286,7 +3325,7 @@ def show_stock_page(row):
 
     c7, c8, c9 = st.columns(3)
     with c7: metric_card("利回り", fmt_percent(dy), f'取得元：{source_map.get("dividend_yield")}')
-    with c8: metric_card("決算日", fmt_date_value(combined.get("earnings_date")), f'取得元：{source_map.get("earnings_date", "未取得")}')
+    with c8: metric_card("決算日", fmt_date_value(fmt_jp_date(combined.get("earnings_date"))), f'取得元：{source_map.get("earnings_date", "未取得")}')
     with c9: metric_card("ニュース見出し", fmt_news_title(combined.get("news_headline")), f'取得元：{source_map.get("news_headline", "未取得")}')
 
     with st.expander("📌 取得元を確認する"):
@@ -3328,7 +3367,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v54</div>
+            <div class="hero-title-main">AI関連株コード辞典 v55</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3381,7 +3420,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v54</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v55</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

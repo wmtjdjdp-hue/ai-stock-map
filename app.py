@@ -22,10 +22,10 @@ try:
 except Exception:
     GoogleTranslator = None
 
-st.set_page_config(page_title="AI関連株コード辞典 v58", page_icon="📈", layout="wide")
+st.set_page_config(page_title="AI関連株コード辞典 v59", page_icon="📈", layout="wide")
 
 # ============================================================
-# AI関連株コード辞典 v58 Clean
+# AI関連株コード辞典 v59 Clean
 # 目的：
 # - 登録済み銘柄は stocks.csv を優先
 # - 未登録銘柄でも、無料API/yfinanceから会社名・業種・分類・事業内容を自動取得
@@ -989,12 +989,17 @@ def fmt_news_title(x):
     return x
 
 def metric_card(label, value, sub=None):
+    # Chrome/Google翻訳で PER が「パー」などに翻訳されないように固定
+    no_translate_labels = {"PER", "PBR", "EPS", "ROE"}
+    label_attr = ' translate="no" class="notranslate metric-label2"' if str(label) in no_translate_labels else ' class="metric-label2"'
+    value_attr = ' translate="no" class="notranslate metric-value2"' if str(label) in no_translate_labels else ' class="metric-value2"'
+
     sub_html = f'<div class="metric-sub">{sub}</div>' if sub else '<div class="metric-sub">&nbsp;</div>'
     st.markdown(
         f"""
         <div class="metric-card">
-            <div class="metric-label2">{label}</div>
-            <div class="metric-value2">{value}</div>
+            <div{label_attr}>{label}</div>
+            <div{value_attr}>{value}</div>
             {sub_html}
         </div>
         """,
@@ -1608,6 +1613,7 @@ st.markdown(
     .notice {background:#fff7d6;border-left:5px solid #f59e0b;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
     .safe {background:#ecfdf5;border-left:5px solid #10b981;padding:12px 14px;border-radius:12px;margin-bottom:12px;}
     .metric-card {background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:12px 14px;min-height:96px;box-shadow:0 3px 14px rgba(0,0,0,.04);overflow:hidden;margin-bottom:10px;}
+    .notranslate { unicode-bidi: isolate; }
     .metric-label2 {color:#64748b;font-size:13px;font-weight:800;margin-bottom:6px;white-space:nowrap;}
     .metric-value2 {color:#111827;font-size:clamp(20px,2.8vw,32px);font-weight:850;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
     .metric-sub {color:#64748b;font-size:12px;font-weight:700;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -3398,7 +3404,7 @@ st.markdown(
     <div class="app-hero">
         <div class="hero-icon">📖</div>
         <div class="hero-title-wrap">
-            <div class="hero-title-main">AI関連株コード辞典 v58</div>
+            <div class="hero-title-main">AI関連株コード辞典 v59</div>
             <div class="hero-sub-main">会社情報・AIとのつながり・分類を見やすく整理するリサーチ画面</div>
         </div>
     </div>
@@ -3451,7 +3457,7 @@ st.sidebar.markdown(
     <div class="sidebar-brand">
         <div class="sidebar-brand-top">
             <div class="sidebar-logo">📖</div>
-            <div class="sidebar-brand-title">AI関連株コード辞典<br>v58</div>
+            <div class="sidebar-brand-title">AI関連株コード辞典<br>v59</div>
         </div>
         <div class="sidebar-brand-sub">
             AIと企業のつながりを見やすく整理するリサーチ画面

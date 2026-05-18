@@ -1,3 +1,11 @@
+# AI関連株コード辞典 v59 No Translate PER
+
+## v59で修正した内容
+- データ自動取得カードの PER がブラウザ翻訳で「パー」と表示される問題を修正
+- PER / PBR / EPS / ROE に translate="no" と notranslate を追加
+- 常に PER / PBR / EPS / ROE の英字表示を維持
+- 他のロジック、AI関連図、全銘柄一覧、Google保存、AI調査サポートは触っていません
+
 # AI関連株コード辞典 v58 News Headline Japanese
 
 ## v58で修正した内容
